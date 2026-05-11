@@ -97,6 +97,48 @@ app.post('/api/check-drive', async (req, res) => {
   }
 });
 
+
+app.post('/api/check-web', async (req, res) => {
+  const { stock } = req.body;
+  if (!stock) return res.status(400).json({ error: 'stock requis' });
+  try {
+    const url = 'https://www.hyundaistraymond.com/occasion/recherche.html';
+    const response = await fetch(url, {
+      headers: {'User-Agent':'Mozilla/5.0'},
+      signal: AbortSignal.timeout(10000)
+    });
+    const html = await response.text();
+    const stockUp = stock.toUpperCase();
+    const enligne = html.includes('Stock: '+stockUp) || html.includes('Stock: '+stock);
+    let photos = 0;
+    let ficheUrl = null;
+    if (enligne) {
+      const searchIdx = html.indexOf(stockUp);
+      if (searchIdx !== -1) {
+        const before = html.substring(Math.max(0, searchIdx - 2000), searchIdx + 500);
+        const urlMatch = before.match(/href="(/occasion/[^"]+idd+.html)"/);
+        if (urlMatch) {
+          ficheUrl = 'https://www.hyundaistraymond.com' + urlMatch[1];
+          try {
+            const ficheRes = await fetch(ficheUrl, {
+              headers: {'User-Agent':'Mozilla/5.0'},
+              signal: AbortSignal.timeout(8000)
+            });
+            const ficheHtml = await ficheRes.text();
+            const imgMatches = ficheHtml.match(/imagescdn.d2cmedia.ca[^"']+/g) || [];
+            const unique = [...new Set(imgMatches.filter(u => !u.includes('logo')))];
+            photos = unique.length;
+          } catch(e) { photos = 0; }
+        }
+      }
+    }
+    return res.json({ enligne, photos, ficheUrl });
+  } catch(err) {
+    console.error('check-web:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
