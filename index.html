@@ -596,26 +596,21 @@ async function checkDrive(vid){
   if(!v||v.docs.scanning)return;
   v.docs.scanning=true;renderAll();
   try{
-    const r=await fetch('https://api.anthropic.com/v1/messages',{
+    const r=await fetch('/api/check-drive',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({
-        model:'claude-sonnet-4-20250514',max_tokens:600,
-        mcp_servers:[{type:'url',url:'https://drivemcp.googleapis.com/mcp/v1',name:'google-drive'}],
-        messages:[{role:'user',content:'Cherche dans Google Drive le dossier dont le titre commence par "'+v.stock+'" dans le dossier parent ID "'+DRIVE_PARENT_ID+'". Liste ses fichiers. Réponds UNIQUEMENT en JSON sans markdown: {"folderFound":bool,"folderUrl":"url ou null","carfax":bool,"inspection":bool,"estimation":bool}'}]
-      })
+      body:JSON.stringify({stock:v.stock,parentId:DRIVE_PARENT_ID})
     });
-    const d=await r.json();
-    const txt=d.content?.filter(b=>b.type==='text').map(b=>b.text).join('')||'';
-    const m=txt.match(/\{[\s\S]*?\}/);
-    if(m){
-      const p=JSON.parse(m[0]);
-      v.docs.carfax=p.carfax??false;
-      v.docs.inspection=p.inspection??false;
-      v.docs.estimation=p.estimation??false;
-      v.docs.driveFolder=p.folderUrl||null;
-    }
-  }catch(e){v.docs.carfax=false;v.docs.inspection=false;v.docs.estimation=false;}
+    if(!r.ok)throw new Error('Erreur serveur '+r.status);
+    const p=await r.json();
+    v.docs.carfax=p.carfax??false;
+    v.docs.inspection=p.inspection??false;
+    v.docs.estimation=p.estimation??false;
+    v.docs.driveFolder=p.folderUrl||null;
+  }catch(e){
+    console.error('checkDrive:',e);
+    v.docs.carfax=false;v.docs.inspection=false;v.docs.estimation=false;
+  }
   v.docs.scanning=false;
   saveVehicles();renderAll();
 }
