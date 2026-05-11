@@ -6,64 +6,93 @@ const PORT = process.env.PORT || 3000;
 app.use(express.json());
 app.use(express.static(path.join(__dirname)));
 
+async function getGoogleToken() {
+  const raw = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
+  if (!raw) throw new Error('GOOGLE_SERVICE_ACCOUNT_JSON non configurée');
+  const creds = JSON.parse(raw);
+
+  const now = Math.floor(Date.now() / 1000);
+  const header = Buffer.from(JSON.stringify({ alg: 'RS256', typ: 'JWT' })).toString('base64url');
+  const payload = Buffer.from(JSON.stringify({
+    iss: creds.client_email,
+    scope: 'https://www.googleapis.com/auth/drive.readonly',
+    aud: 'https://oauth2.googleapis.com/token',
+    iat: now,
+    exp: now + 3600
+  })).toString('base64url');
+
+  const signingInput = `${header}.${payload}`;
+  const privateKey = creds.private_key;
+
+  const { createSign } = await import('crypto');
+  const sign = createSign('RSA-SHA256');
+  sign.update(signingInput);
+  const signature = sign.sign(privateKey, 'base64url');
+  const jwt = `${signingInput}.${signature}`;
+
+  const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+      assertion: jwt
+    })
+  });
+  const tokenData = await tokenRes.json();
+  if (!tokenData.access_token) throw new Error('Token Google invalide: ' + JSON.stringify(tokenData));
+  return tokenData.access_token;
+}
+
+async function driveSearch(token, query) {
+  const q = encodeURIComponent(query);
+  const url = `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name,mimeType,webViewLink)&pageSize=50`;
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  const data = await res.json();
+  return data.files || [];
+}
+
 app.post('/api/check-drive', async (req, res) => {
   const { stock, parentId } = req.body;
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-
-  if (!apiKey) {
-    return res.status(500).json({ error: 'ANTHROPIC_API_KEY non configurée' });
-  }
-  if (!stock || !parentId) {
-    return res.status(400).json({ error: 'stock et parentId requis' });
-  }
+  if (!stock || !parentId) return res.status(400).json({ error: 'stock et parentId requis' });
 
   try {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'anthropic-beta': 'mcp-client-2025-04-04'
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 600,
-        mcp_servers: [{
-          type: 'url',
-          url: 'https://drivemcp.googleapis.com/mcp/v1',
-          name: 'google-drive'
-        }],
-        messages: [{
-          role: 'user',
-          content: `Cherche dans Google Drive le dossier dont le titre commence par "${stock}" dans le dossier parent ID "${parentId}". Liste ses fichiers. Réponds UNIQUEMENT en JSON sans markdown: {"folderFound":bool,"folderUrl":"url ou null","carfax":bool,"inspection":bool,"estimation":bool}`
-        }]
-      })
+    const token = await getGoogleToken();
+    const stockUpper = stock.toUpperCase();
+    const stockLower = stock.toLowerCase();
+
+    const folders = await driveSearch(token,
+      `'${parentId}' in parents and mimeType='application/vnd.google-apps.folder' and name contains '${stockUpper}' and trashed=false`
+    );
+
+    if (!folders.length) {
+      return res.json({ folderFound: false, folderUrl: null, carfax: false, inspection: false, estimation: false, files: [] });
+    }
+
+    const folder = folders[0];
+    const files = await driveSearch(token,
+      `'${folder.id}' in parents and trashed=false`
+    );
+
+    const names = files.map(f => f.name.toLowerCase());
+    const carfax = names.some(n => n.includes('carfax'));
+    const estimation = names.some(n => n.includes('-i') || n.endsWith('-i.pdf'));
+    const inspection = names.some(n => {
+      const clean = n.replace('.pdf','').toLowerCase();
+      const s = stockLower;
+      return clean === s || (clean.startsWith(s) && !clean.includes('carfax') && !clean.includes('-i'));
     });
 
-    const data = await response.json();
-
-    if (!response.ok) {
-      return res.status(502).json({ error: 'Erreur API Anthropic', detail: data });
-    }
-
-    const txt = (data.content || [])
-      .filter(b => b.type === 'text')
-      .map(b => b.text)
-      .join('');
-
-    const match = txt.match(/\{[\s\S]*?\}/);
-    if (match) {
-      try {
-        return res.json(JSON.parse(match[0]));
-      } catch (e) {
-        return res.status(502).json({ error: 'Réponse JSON invalide', raw: txt });
-      }
-    }
-    return res.status(502).json({ error: 'Aucun JSON dans la réponse', raw: txt });
+    return res.json({
+      folderFound: true,
+      folderUrl: folder.webViewLink,
+      carfax,
+      inspection,
+      estimation,
+      files: files.map(f => f.name)
+    });
 
   } catch (err) {
-    console.error('Erreur /api/check-drive:', err);
+    console.error('Erreur /api/check-drive:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
