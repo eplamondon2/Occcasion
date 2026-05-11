@@ -243,9 +243,22 @@ header{background:var(--blue);color:white;padding:0 20px;height:56px;display:fle
       <div class="stat"><div class="stat-label">Docs manquants</div><div class="stat-val amber" id="s-docs">–</div></div>
     </div>
 
+    <div id="my-tasks-banner" style="display:none;background:var(--blue);color:white;border-radius:var(--radius);padding:14px 18px;margin-bottom:14px;align-items:center;justify-content:space-between;gap:12px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <i class="ti ti-list-check" style="font-size:20px;opacity:.85"></i>
+        <div>
+          <div style="font-size:14px;font-weight:600" id="my-tasks-title">Mes tâches</div>
+          <div style="font-size:12px;opacity:.8" id="my-tasks-sub"></div>
+        </div>
+      </div>
+      <span id="my-tasks-count" style="background:white;color:var(--blue);font-size:18px;font-weight:700;padding:4px 14px;border-radius:20px">0</span>
+    </div>
     <div class="toolbar">
       <div class="filters">
-        <button class="filter-btn active" onclick="setFilter('all',this)">Tous</button>
+        <button class="filter-btn" id="btn-mytasks" onclick="setFilter('mine',this)" style="display:none">
+          <i class="ti ti-user-check" style="font-size:12px"></i> Mes tâches <span id="badge-mine" style="background:var(--blue);color:white;border-radius:20px;padding:1px 7px;font-size:10px;margin-left:3px">0</span>
+        </button>
+        <button class="filter-btn active" onclick="setFilter('all',this)" id="btn-all">Tous</button>
         <button class="filter-btn" onclick="setFilter('active',this)">En cours</button>
         <button class="filter-btn" onclick="setFilter('late',this)">En retard</button>
         <button class="filter-btn" onclick="setFilter('done',this)">Complétés</button>
@@ -314,8 +327,6 @@ const TEAM = {
 };
 
 const STEPS_DEF = [
-  {id:'serti',phase:'auto',name:'Entrée Serti Keyloop (comptabilité)',assign:'Comptabilité',delay:0,icon:'ti-database',auto:true},
-  {id:'push',phase:'auto',name:'Push automatique — D2C Media & Vauto',assign:'DMS automatique',delay:0,icon:'ti-bolt',auto:true},
   {id:'enligne',phase:'dir',name:'Mise en ligne site web D2C',assign:'Serge Grenier / Nicolas Rivard',delay:1,icon:'ti-world'},
   {id:'prix',phase:'dir',name:'Validation prix — Vauto',assign:'Serge Grenier / Nicolas Rivard',delay:1,icon:'ti-chart-bar'},
   {id:'req_insp',phase:'dir',name:'Requête inspection — Serti',assign:'Dir. → Vincent Bouchard',delay:1,icon:'ti-clipboard-list'},
@@ -329,7 +340,6 @@ const STEPS_DEF = [
   {id:'complet',phase:'photo',name:'Dossier complet — prêt à la vente',assign:'Serge Grenier',delay:0,icon:'ti-circle-check'},
 ];
 const PHASES = [
-  {id:'auto',label:'Automatique — DMS',icon:'ti-bolt'},
   {id:'dir',label:'Direction — mise en marché',icon:'ti-user'},
   {id:'service',label:'Département service',icon:'ti-tool'},
   {id:'photo',label:'Photos & finalisation',icon:'ti-camera'},
@@ -369,6 +379,8 @@ function showApp(){
   document.getElementById('header-avatar').textContent = info.initials||currentUser[0];
   const canEdit = ['Serge Grenier','Nicolas Rivard'].includes(currentUser);
   document.getElementById('btn-add').style.display = canEdit?'inline-flex':'none';
+  const isFieldWorker = ['Martin Napier','Nicolas Fiset','Charles Boivin','Vincent Bouchard'].includes(currentUser);
+  if(isFieldWorker){ currentFilter='mine'; }
   loadVehicles();
 }
 
@@ -429,6 +441,7 @@ function loadVehicles(){
     }
   }catch(e){setSaveInd('error');}
   renderAll();
+  updateMyTasksBanner();
 }
 
 function setSaveInd(state, msg){
@@ -441,17 +454,68 @@ function setSaveInd(state, msg){
   else el.innerHTML='<i class="ti ti-alert-triangle" style="font-size:12px"></i> Erreur';
 }
 
+
+const ROLE_STEPS = {
+  'Vincent Bouchard': ['insp'],
+  'Martin Napier': ['esthet'],
+  'Nicolas Fiset': ['esthet'],
+  'Charles Boivin': ['photos'],
+  'Serge Grenier': ['enligne','prix','req_insp','req_carro','req_pb','complet'],
+  'Nicolas Rivard': ['enligne','prix','req_insp','req_carro','req_pb','carro','photos'],
+};
+
+function getMyTasks(){
+  const myStepIds = ROLE_STEPS[currentUser]||[];
+  if(!myStepIds.length) return [];
+  return vehicles.filter(v=>{
+    return v.steps.some((s,i)=>{
+      if(!myStepIds.includes(s.id)) return false;
+      const st = stepStatus(v,i);
+      return st==='active'||st==='warn'||st==='late';
+    });
+  });
+}
+
+function updateMyTasksBanner(){
+  const myTasks = getMyTasks();
+  const banner = document.getElementById('my-tasks-banner');
+  const btn = document.getElementById('btn-mytasks');
+  const badge = document.getElementById('badge-mine');
+  const count = document.getElementById('my-tasks-count');
+  const sub = document.getElementById('my-tasks-sub');
+  const hasRole = !!(ROLE_STEPS[currentUser]&&ROLE_STEPS[currentUser].length);
+  if(hasRole){
+    if(btn) btn.style.display='inline-flex';
+    if(badge) badge.textContent=myTasks.length;
+    if(count) count.textContent=myTasks.length;
+    if(banner){
+      if(myTasks.length>0){
+        banner.style.display='flex';
+        if(sub) sub.textContent=myTasks.length+' vehicule'+(myTasks.length>1?'s en attente':' en attente');
+      } else {
+        banner.style.display='none';
+      }
+    }
+  } else {
+    if(btn) btn.style.display='none';
+    if(banner) banner.style.display='none';
+  }
+}
+
 function renderAll(){
   let list = vehicles;
   if(currentFilter==='late') list=vehicles.filter(isLate);
   else if(currentFilter==='active') list=vehicles.filter(v=>progress(v)<100&&!isLate(v));
   else if(currentFilter==='done') list=vehicles.filter(v=>progress(v)===100);
   else if(currentFilter==='docs') list=vehicles.filter(hasDocIssue);
+  else if(currentFilter==='mine') list=getMyTasks();
   const el = document.getElementById('vlist');
   if(!vehicles.length){
     el.innerHTML='<div class="empty"><i class="ti ti-car"></i><div style="font-size:15px;font-weight:600;margin-bottom:6px">Aucun dossier</div><div>Cliquez "Nouveau" pour créer le premier dossier de suivi</div></div>';
   } else if(!list.length){
-    el.innerHTML='<div class="empty"><i class="ti ti-filter"></i><div>Aucun résultat pour ce filtre</div></div>';
+    const emsg = currentFilter==='mine'?'Aucune tache en attente — tout est a jour!':'Aucun resultat pour ce filtre';
+    const eico = currentFilter==='mine'?'ti-circle-check':'ti-filter';
+    el.innerHTML='<div class="empty"><i class="ti '+eico+'"></i><div>'+emsg+'</div></div>';
   } else {
     el.innerHTML=list.map(renderCard).join('');
   }
@@ -535,8 +599,11 @@ function renderStep(v,s,i,canEdit){
   else if(st==='warn'){dlTxt='Délai atteint aujourd\'hui';dlC='warn';}
   else if(dl===0){dlTxt='Automatique à l\'arrivée';dlC='ok';}
   else{const left=dl-v.daysAgo;dlTxt='Délai dans '+left+' jour'+(left>1?'s':'');dlC='ok';}
-  const canAct=canEdit&&(st==='active'||st==='warn'||st==='late')&&!v.sd[i].done;
+  const isDir=['Serge Grenier','Nicolas Rivard'].includes(currentUser);
   const myStep=isMyStep(s);
+  const myStepIds=ROLE_STEPS[currentUser]||[];
+  const isMyOwnStep=myStepIds.includes(s.id);
+  const canAct=(isDir||isMyOwnStep)&&!v.sd[i].done&&st!=='blocked';
   const rowC=st==='late'?'step late':st==='active'||st==='warn'?'step active':'step';
   return`<div class="${rowC}">
     <div class="step-ico ${icoC}"><i class="ti ${ico}"></i></div>
