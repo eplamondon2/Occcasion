@@ -1,0 +1,15 @@
+{
+  "name": "hyundai-sr-occasion",
+  "version": "1.0.0",
+  "description": "Hyundai St-Raymond — Suivi mise en marché véhicules d'occasion",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

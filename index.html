@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hyundai St-Raymond — Occasion</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚗</text></svg>">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
+<style>
+:root{
+  --blue:#003087;--blue-light:#E6F0FF;--blue-mid:#185FA5;
+  --green:#0F6E56;--green-light:#E1F5EE;
+  --red:#A32D2D;--red-light:#FCEBEB;
+  --amber:#854F0B;--amber-light:#FAEEDA;
+  --border:#e2e8f0;--border-light:#f1f5f9;
+  --text:#1a202c;--text-muted:#64748b;--text-hint:#94a3b8;
+  --bg:#f8fafc;--card:#ffffff;
+  --radius:10px;--radius-sm:6px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);font-size:14px;line-height:1.5}
+
+/* LOGIN */
+.login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+.login-card{background:var(--card);border-radius:16px;border:1px solid var(--border);padding:40px 36px;width:100%;max-width:380px;text-align:center}
+.login-logo{width:56px;height:56px;background:var(--blue);border-radius:14px;display:flex;align-items:center;justify-content:center;margin:0 auto 20px;color:white;font-size:24px}
+.login-card h1{font-size:20px;font-weight:600;margin-bottom:4px}
+.login-card p{color:var(--text-muted);font-size:13px;margin-bottom:28px}
+.login-card .fg{text-align:left;margin-bottom:14px}
+.login-card label{display:block;font-size:12px;font-weight:500;color:var(--text-muted);margin-bottom:5px}
+.login-card input{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:14px;outline:none;transition:border .2s}
+.login-card input:focus{border-color:var(--blue-mid)}
+.login-card .fg-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.btn-login{width:100%;padding:11px;background:var(--blue);color:white;border:none;border-radius:var(--radius-sm);font-size:14px;font-weight:500;cursor:pointer;margin-top:6px}
+.btn-login:hover{background:#002266}
+.login-error{background:var(--red-light);color:var(--red);font-size:12px;padding:8px 12px;border-radius:var(--radius-sm);margin-top:10px;display:none}
+
+/* HEADER */
+header{background:var(--blue);color:white;padding:0 20px;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
+.header-left{display:flex;align-items:center;gap:10px}
+.header-logo{font-size:18px;font-weight:700;letter-spacing:-.3px}
+.header-sub{font-size:11px;opacity:.7;margin-top:1px}
+.header-user{display:flex;align-items:center;gap:8px;font-size:13px}
+.header-user .avatar{width:30px;height:30px;border-radius:50%;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600}
+.btn-logout{background:rgba(255,255,255,.15);border:none;color:white;padding:5px 10px;border-radius:var(--radius-sm);font-size:12px;cursor:pointer}
+.btn-logout:hover{background:rgba(255,255,255,.25)}
+
+/* MAIN */
+.main{max-width:900px;margin:0 auto;padding:20px 16px}
+
+/* STATS */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px}
+.stat{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px}
+.stat-label{font-size:11px;color:var(--text-muted);margin-bottom:4px;font-weight:500}
+.stat-val{font-size:24px;font-weight:700}
+.stat-val.blue{color:var(--blue-mid)}
+.stat-val.green{color:var(--green)}
+.stat-val.red{color:var(--red)}
+.stat-val.amber{color:var(--amber)}
+
+/* TOOLBAR */
+.toolbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:10px;flex-wrap:wrap}
+.filters{display:flex;gap:6px;flex-wrap:wrap}
+.filter-btn{padding:5px 12px;border:1px solid var(--border);border-radius:20px;background:var(--card);color:var(--text-muted);font-size:12px;cursor:pointer;transition:all .15s}
+.filter-btn:hover{border-color:var(--blue-mid);color:var(--blue-mid)}
+.filter-btn.active{background:var(--blue);border-color:var(--blue);color:white}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--card);color:var(--text);font-size:13px;cursor:pointer;font-weight:500}
+.btn:hover{background:var(--border-light)}
+.btn-primary{background:var(--blue);border-color:var(--blue);color:white}
+.btn-primary:hover{background:#002266}
+.btn-sm{display:inline-flex;align-items:center;gap:4px;padding:4px 9px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--card);color:var(--text-muted);font-size:11px;cursor:pointer}
+.btn-sm:hover{background:var(--border-light);color:var(--text)}
+.btn-sm.success{border-color:#9FE1CB;color:var(--green)}
+.btn-sm.success:hover{background:var(--green-light)}
+.btn-sm.danger{border-color:#fca5a5;color:var(--red)}
+.btn-sm.danger:hover{background:var(--red-light)}
+.btn-sm.drive{border-color:#4285f4;color:#1a56db}
+.btn-sm.drive:hover{background:#EBF5FF}
+
+/* VEHICLE CARDS */
+.vcard{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:10px;overflow:hidden}
+.vcard.is-late{border-left:3px solid var(--red)}
+.vcard.is-done{border-left:3px solid var(--green)}
+.vchead{display:flex;align-items:center;gap:12px;padding:13px 16px;cursor:pointer;transition:background .1s}
+.vchead:hover{background:var(--border-light)}
+.vinfo{flex:1;min-width:0}
+.vtitle{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.vname{font-size:14px;font-weight:600}
+.vmeta{display:flex;gap:10px;margin-top:3px;flex-wrap:wrap}
+.vmeta span{font-size:11px;color:var(--text-muted)}
+.vmeta .stock{font-family:monospace;font-size:12px;font-weight:600;color:var(--text)}
+.pbar-wrap{width:140px;flex-shrink:0}
+.pbar-bg{height:6px;background:var(--border-light);border-radius:3px;overflow:hidden}
+.pbar-fill{height:100%;border-radius:3px;transition:width .3s}
+.pbar-label{font-size:10px;color:var(--text-muted);margin-top:3px;text-align:right}
+.vchead-actions{display:flex;gap:6px;align-items:center;flex-shrink:0}
+.chev{font-size:16px;color:var(--text-hint);transition:transform .2s}
+.chev.open{transform:rotate(180deg)}
+
+/* BADGE */
+.badge{font-size:10px;padding:2px 8px;border-radius:20px;font-weight:600;display:inline-flex;align-items:center;gap:3px;white-space:nowrap}
+.badge-green{background:var(--green-light);color:var(--green)}
+.badge-red{background:var(--red-light);color:var(--red)}
+.badge-amber{background:var(--amber-light);color:var(--amber)}
+.badge-blue{background:var(--blue-light);color:var(--blue-mid)}
+.badge-gray{background:var(--border-light);color:var(--text-muted);border:1px solid var(--border)}
+
+/* BODY */
+.vcbody{display:none;border-top:1px solid var(--border);padding:14px 16px}
+.vcbody.open{display:block}
+
+/* DOC CHECKS */
+.doc-checks{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px}
+.doc-card{background:var(--border-light);border-radius:var(--radius-sm);padding:10px 12px;border:1px solid var(--border)}
+.doc-card .dc-label{font-size:11px;color:var(--text-muted);margin-bottom:5px;display:flex;align-items:center;gap:4px}
+.doc-card .dc-val{font-size:12px;font-weight:600;display:flex;align-items:center;gap:4px}
+.dc-val.ok{color:var(--green)}
+.dc-val.missing{color:var(--red)}
+.dc-val.warn{color:var(--amber)}
+.dc-val.muted{color:var(--text-muted)}
+.doc-card .dc-file{font-size:10px;color:var(--text-hint);margin-top:3px;font-family:monospace}
+
+/* PHASES */
+.phase-label{font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;margin:12px 0 6px;display:flex;align-items:center;gap:5px}
+.step{display:flex;align-items:flex-start;gap:10px;padding:9px 12px;border-radius:var(--radius-sm);border:1px solid var(--border);margin-bottom:5px;background:var(--card)}
+.step.active{background:var(--blue-light);border-color:#93c5fd}
+.step.late{background:var(--red-light);border-color:#fca5a5}
+.step-ico{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0}
+.step-ico.done{background:var(--green-light);color:var(--green)}
+.step-ico.active{background:var(--blue-light);color:var(--blue-mid)}
+.step-ico.late{background:var(--red-light);color:var(--red)}
+.step-ico.blocked{background:var(--border-light);color:var(--text-hint);border:1px solid var(--border)}
+.step-content{flex:1;min-width:0}
+.step-name{font-size:12px;font-weight:600}
+.step-assign{font-size:11px;color:var(--text-muted);margin-top:1px}
+.step-dl{font-size:10px;margin-top:2px}
+.step-dl.ok{color:var(--green)}
+.step-dl.warn{color:var(--amber)}
+.step-dl.late{color:var(--red)}
+.step-dl.muted{color:var(--text-muted)}
+.step-actions{display:flex;gap:5px;align-items:center;flex-shrink:0}
+
+/* CARD FOOTER */
+.card-footer{display:flex;gap:6px;margin-top:12px;flex-wrap:wrap;align-items:center;justify-content:space-between}
+.card-footer-left{display:flex;gap:6px;flex-wrap:wrap}
+
+/* NOTIF */
+.notif-bar{position:sticky;top:56px;z-index:99;padding:0 16px}
+.notif{display:flex;align-items:center;gap:8px;padding:9px 14px;border-radius:var(--radius-sm);font-size:13px;margin-bottom:8px;border:1px solid transparent}
+.notif.info{background:var(--blue-light);border-color:#93c5fd;color:var(--blue-mid)}
+.notif.ok{background:var(--green-light);border-color:#9FE1CB;color:var(--green)}
+.notif.warn{background:var(--amber-light);border-color:#FAC775;color:var(--amber)}
+
+/* MODAL */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;align-items:flex-start;justify-content:center;padding:60px 16px 16px;overflow-y:auto}
+.modal-overlay.open{display:flex}
+.modal{background:var(--card);border-radius:16px;border:1px solid var(--border);padding:24px 26px;width:100%;max-width:460px}
+.modal h3{font-size:16px;font-weight:600;margin-bottom:16px;display:flex;align-items:center;gap:8px}
+.fg{margin-bottom:12px}
+.fg label{display:block;font-size:12px;font-weight:500;color:var(--text-muted);margin-bottom:4px}
+.fg input,.fg select{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;outline:none;background:var(--bg)}
+.fg input:focus,.fg select:focus{border-color:var(--blue-mid)}
+.fg-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.section-title{font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin:14px 0 8px;padding-top:14px;border-top:1px solid var(--border)}
+.check-row{display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:8px;cursor:pointer}
+.check-row input{width:15px;height:15px;cursor:pointer;accent-color:var(--blue)}
+.modal-footer{display:flex;justify-content:flex-end;gap:8px;margin-top:16px;padding-top:14px;border-top:1px solid var(--border)}
+
+/* SAVE IND */
+.save-ind{font-size:11px;color:var(--text-muted);display:flex;align-items:center;gap:5px}
+.save-ind.ok{color:var(--green)}
+.save-ind.saving{color:var(--amber)}
+
+/* EMPTY */
+.empty{text-align:center;padding:50px 20px;color:var(--text-muted)}
+.empty i{font-size:40px;opacity:.3;display:block;margin-bottom:12px}
+
+/* SPINNER */
+.spin{display:inline-block;width:12px;height:12px;border:2px solid var(--border);border-top-color:var(--blue-mid);border-radius:50%;animation:sp .7s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+
+/* MOBILE */
+@media(max-width:600px){
+  .stats{grid-template-columns:1fr 1fr}
+  .doc-checks{grid-template-columns:1fr}
+  .pbar-wrap{display:none}
+  .fg-row{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div class="login-wrap" id="login-screen">
+  <div class="login-card">
+    <div class="login-logo"><i class="ti ti-car"></i></div>
+    <h1>Hyundai St-Raymond</h1>
+    <p>Gestion des véhicules d'occasion</p>
+    <div class="fg">
+      <label>Votre nom</label>
+      <select id="login-user">
+        <option value="">— Sélectionnez —</option>
+        <option value="Serge Grenier">Serge Grenier — Directeur des ventes</option>
+        <option value="Nicolas Rivard">Nicolas Rivard — Directeur adjoint</option>
+        <option value="Martin Napier">Martin Napier — Esthétique</option>
+        <option value="Nicolas Fiset">Nicolas Fiset — Esthétique</option>
+        <option value="Charles Boivin">Charles Boivin — Photos</option>
+        <option value="Vincent Bouchard">Vincent Bouchard — Dir. pièces / Inspection</option>
+      </select>
+    </div>
+    <div class="fg">
+      <label>Mot de passe</label>
+      <input type="password" id="login-pw" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()">
+    </div>
+    <button class="btn-login" onclick="doLogin()">Accéder au tableau de bord</button>
+    <div class="login-error" id="login-error">Nom ou mot de passe incorrect.</div>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app-screen" style="display:none">
+  <header>
+    <div class="header-left">
+      <div>
+        <div class="header-logo">Hyundai St-Raymond</div>
+        <div class="header-sub">Suivi mise en marché — occasion</div>
+      </div>
+    </div>
+    <div class="header-user">
+      <span id="header-username" style="font-size:12px;opacity:.85"></span>
+      <div class="avatar" id="header-avatar"></div>
+      <button class="btn-logout" onclick="doLogout()"><i class="ti ti-logout" style="font-size:13px"></i> Quitter</button>
+    </div>
+  </header>
+
+  <div class="notif-bar" id="notif-bar"></div>
+
+  <div class="main">
+    <div class="stats">
+      <div class="stat"><div class="stat-label">En cours</div><div class="stat-val blue" id="s-active">–</div></div>
+      <div class="stat"><div class="stat-label">Complétés</div><div class="stat-val green" id="s-done">–</div></div>
+      <div class="stat"><div class="stat-label">En retard</div><div class="stat-val red" id="s-late">–</div></div>
+      <div class="stat"><div class="stat-label">Docs manquants</div><div class="stat-val amber" id="s-docs">–</div></div>
+    </div>
+
+    <div class="toolbar">
+      <div class="filters">
+        <button class="filter-btn active" onclick="setFilter('all',this)">Tous</button>
+        <button class="filter-btn" onclick="setFilter('active',this)">En cours</button>
+        <button class="filter-btn" onclick="setFilter('late',this)">En retard</button>
+        <button class="filter-btn" onclick="setFilter('done',this)">Complétés</button>
+        <button class="filter-btn" onclick="setFilter('docs',this)">Docs manquants</button>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <span class="save-ind" id="save-ind"><i class="ti ti-cloud" style="font-size:12px"></i> Chargement…</span>
+        <button class="btn" onclick="scanAll()" id="can-add"><i class="ti ti-refresh" style="font-size:14px"></i> Drive</button>
+        <button class="btn btn-primary" onclick="openModal()" id="btn-add"><i class="ti ti-plus" style="font-size:14px"></i> Nouveau</button>
+      </div>
+    </div>
+
+    <div id="vlist"></div>
+  </div>
+</div>
+
+<!-- MODAL -->
+<div class="modal-overlay" id="modal">
+  <div class="modal">
+    <h3><i class="ti ti-car" style="color:var(--blue-mid)"></i> Nouveau dossier véhicule</h3>
+    <div class="fg-row">
+      <div class="fg"><label>Stock #</label><input id="f-stk" placeholder="ex: 7380A"></div>
+      <div class="fg"><label>Année</label><input type="number" id="f-yr" placeholder="2024" min="2000" max="2030"></div>
+    </div>
+    <div class="fg-row">
+      <div class="fg"><label>Marque</label><input id="f-mk" placeholder="Hyundai"></div>
+      <div class="fg"><label>Modèle</label><input id="f-mo" placeholder="Tucson"></div>
+    </div>
+    <div class="fg-row">
+      <div class="fg"><label>Kilométrage</label><input type="number" id="f-km" placeholder="45000"></div>
+      <div class="fg"><label>Prix demandé ($)</label><input type="number" id="f-pr" placeholder="29995"></div>
+    </div>
+    <div class="fg"><label>Couleur</label><input id="f-col" placeholder="ex: Blanc, Noir, Gris..."></div>
+    <div class="fg"><label>Responsable principal</label>
+      <select id="f-resp">
+        <option value="Serge Grenier">Serge Grenier — Directeur des ventes</option>
+        <option value="Nicolas Rivard">Nicolas Rivard — Directeur adjoint</option>
+      </select>
+    </div>
+    <div class="section-title">Requêtes département service</div>
+    <label class="check-row"><input type="checkbox" id="f-insp" checked> Inspection mécanique (Vincent Bouchard)</label>
+    <label class="check-row"><input type="checkbox" id="f-carro"> Carrosserie / débosselage</label>
+    <label class="check-row"><input type="checkbox" id="f-pb"> Remplacement pare-brise</label>
+    <label class="check-row"><input type="checkbox" id="f-esthet" checked> Esthétique & détailing (Martin Napier / Nicolas Fiset)</label>
+    <label class="check-row"><input type="checkbox" id="f-photos" checked> Séance photo (Charles Boivin)</label>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal()">Annuler</button>
+      <button class="btn btn-primary" onclick="addVehicle()"><i class="ti ti-send" style="font-size:13px"></i> Créer le dossier</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const PASSWORD = 'hyundai2025';
+const DRIVE_PARENT_ID = '1nTHp8DsOxj8UQHjmk9AW0nYGzdeme-5l';
+const STORAGE_KEY = 'vo-hsr-vehicles-v2';
+const ANTHROPIC_KEY_PLACEHOLDER = 'VOTRE_CLE_API_ANTHROPIC';
+
+const TEAM = {
+  'Serge Grenier': {role:'Directeur des ventes', initials:'SG'},
+  'Nicolas Rivard': {role:'Directeur adjoint', initials:'NR'},
+  'Martin Napier': {role:'Esthétique', initials:'MN'},
+  'Nicolas Fiset': {role:'Esthétique', initials:'NF'},
+  'Charles Boivin': {role:'Photos', initials:'CB'},
+  'Vincent Bouchard': {role:'Dir. pièces / Inspection', initials:'VB'},
+};
+
+const STEPS_DEF = [
+  {id:'serti',phase:'auto',name:'Entrée Serti Keyloop (comptabilité)',assign:'Comptabilité',delay:0,icon:'ti-database',auto:true},
+  {id:'push',phase:'auto',name:'Push automatique — D2C Media & Vauto',assign:'DMS automatique',delay:0,icon:'ti-bolt',auto:true},
+  {id:'enligne',phase:'dir',name:'Mise en ligne site web D2C',assign:'Serge Grenier / Nicolas Rivard',delay:1,icon:'ti-world'},
+  {id:'prix',phase:'dir',name:'Validation prix — Vauto',assign:'Serge Grenier / Nicolas Rivard',delay:1,icon:'ti-chart-bar'},
+  {id:'req_insp',phase:'dir',name:'Requête inspection — Serti',assign:'Dir. → Vincent Bouchard',delay:1,icon:'ti-clipboard-list'},
+  {id:'req_carro',phase:'dir',name:'Requête carrosserie — Serti',assign:'Nicolas Rivard → Carrosserie',delay:1,icon:'ti-car-crash',optional:true,key:'carro'},
+  {id:'req_pb',phase:'dir',name:'Requête pare-brise — Serti',assign:'Dir. → Service',delay:1,icon:'ti-windmill',optional:true,key:'pb'},
+  {id:'insp',phase:'service',name:'Inspection mécanique complétée',assign:'Vincent Bouchard',delay:4,icon:'ti-tool'},
+  {id:'carro',phase:'service',name:'Carrosserie / débosselage complété',assign:'Nicolas Rivard → Carrosserie',delay:5,icon:'ti-car-crash',optional:true,key:'carro'},
+  {id:'pb',phase:'service',name:'Pare-brise remplacé',assign:'Service',delay:4,icon:'ti-windmill',optional:true,key:'pb'},
+  {id:'esthet',phase:'service',name:'Esthétique & détailing',assign:'Martin Napier / Nicolas Fiset',delay:2,icon:'ti-sparkles',optional:true,key:'esthet'},
+  {id:'photos',phase:'photo',name:'Séance photo finale',assign:'Charles Boivin / Nicolas Rivard',delay:1,icon:'ti-camera',optional:true,key:'photos'},
+  {id:'complet',phase:'photo',name:'Dossier complet — prêt à la vente',assign:'Serge Grenier',delay:0,icon:'ti-circle-check'},
+];
+const PHASES = [
+  {id:'auto',label:'Automatique — DMS',icon:'ti-bolt'},
+  {id:'dir',label:'Direction — mise en marché',icon:'ti-user'},
+  {id:'service',label:'Département service',icon:'ti-tool'},
+  {id:'photo',label:'Photos & finalisation',icon:'ti-camera'},
+];
+
+let currentUser = null;
+let vehicles = [];
+let nid = 1;
+let currentFilter = 'all';
+let saveTimeout = null;
+
+function doLogin(){
+  const user = document.getElementById('login-user').value;
+  const pw = document.getElementById('login-pw').value;
+  const err = document.getElementById('login-error');
+  if(!user){err.textContent='Veuillez sélectionner votre nom.';err.style.display='block';return;}
+  if(pw !== PASSWORD){err.textContent='Mot de passe incorrect.';err.style.display='block';return;}
+  err.style.display='none';
+  currentUser = user;
+  sessionStorage.setItem('vo-user', user);
+  showApp();
+}
+
+function doLogout(){
+  sessionStorage.removeItem('vo-user');
+  currentUser = null;
+  document.getElementById('app-screen').style.display='none';
+  document.getElementById('login-screen').style.display='flex';
+  document.getElementById('login-pw').value='';
+}
+
+function showApp(){
+  document.getElementById('login-screen').style.display='none';
+  document.getElementById('app-screen').style.display='block';
+  const info = TEAM[currentUser]||{};
+  document.getElementById('header-username').textContent = currentUser + (info.role?' — '+info.role:'');
+  document.getElementById('header-avatar').textContent = info.initials||currentUser[0];
+  const canEdit = ['Serge Grenier','Nicolas Rivard'].includes(currentUser);
+  document.getElementById('btn-add').style.display = canEdit?'inline-flex':'none';
+  loadVehicles();
+}
+
+function makeSteps(opts){return STEPS_DEF.filter(s=>!s.key||opts[s.key]);}
+
+function cumDelay(v,idx){let d=0;for(let i=0;i<=idx;i++)d+=v.steps[i].delay;return d;}
+function stepStatus(v,i){
+  if(v.sd[i].done)return'done';
+  const prev=i===0||v.sd[i-1].done;
+  if(!prev)return'blocked';
+  const dl=cumDelay(v,i);
+  if(dl===0)return'active';
+  if(v.daysAgo>dl)return'late';
+  if(v.daysAgo>=dl-1)return'warn';
+  return'active';
+}
+function doneCount(v){return v.sd.filter(x=>x.done).length;}
+function progress(v){return v.steps.length?Math.round(doneCount(v)/v.steps.length*100):0;}
+function isLate(v){return progress(v)<100&&v.steps.some((_,i)=>stepStatus(v,i)==='late');}
+function hasDocIssue(v){return v.docs.carfax===false||v.docs.inspection===false;}
+function calcDaysAgo(createdAt){return Math.floor((Date.now()-createdAt)/(86400000));}
+
+function saveVehicles(){
+  setSaveInd('saving');
+  clearTimeout(saveTimeout);
+  saveTimeout = setTimeout(()=>{
+    try{
+      const toSave = vehicles.map(v=>({
+        id:v.id,stock:v.stock,year:v.year,make:v.make,model:v.model,
+        km:v.km,price:v.price,color:v.color||'',resp:v.resp,
+        createdAt:v.createdAt,opts:v.opts,sd:v.sd,expanded:v.expanded,
+        docs:{carfax:v.docs.carfax,inspection:v.docs.inspection,
+              estimation:v.docs.estimation,driveFolder:v.docs.driveFolder||null}
+      }));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({vehicles:toSave,nid,savedAt:new Date().toISOString()}));
+      setSaveInd('ok');
+    }catch(e){setSaveInd('error');}
+  }, 600);
+}
+
+function loadVehicles(){
+  setSaveInd('loading');
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(raw){
+      const data = JSON.parse(raw);
+      nid = data.nid||1;
+      vehicles = (data.vehicles||[]).map(s=>{
+        const steps = makeSteps(s.opts);
+        return{...s,steps,color:s.color||'',
+          daysAgo:calcDaysAgo(s.createdAt),
+          docs:{carfax:s.docs?.carfax??null,inspection:s.docs?.inspection??null,
+                estimation:s.docs?.estimation??null,driveFolder:s.docs?.driveFolder||null,scanning:false}};
+      });
+      setSaveInd('ok', vehicles.length+' dossier'+(vehicles.length>1?'s':'')+' chargé'+(vehicles.length>1?'s':''));
+    } else {
+      setSaveInd('ok','Aucun dossier — commencez par en créer un');
+    }
+  }catch(e){setSaveInd('error');}
+  renderAll();
+}
+
+function setSaveInd(state, msg){
+  const el = document.getElementById('save-ind');
+  if(!el)return;
+  el.className='save-ind '+(state==='ok'?'ok':state==='saving'?'saving':'');
+  if(state==='loading')el.innerHTML='<div class="spin"></div> Chargement…';
+  else if(state==='saving')el.innerHTML='<div class="spin"></div> Sauvegarde…';
+  else if(state==='ok')el.innerHTML='<i class="ti ti-cloud-check" style="font-size:12px"></i> '+(msg||'Sauvegardé');
+  else el.innerHTML='<i class="ti ti-alert-triangle" style="font-size:12px"></i> Erreur';
+}
+
+function renderAll(){
+  let list = vehicles;
+  if(currentFilter==='late') list=vehicles.filter(isLate);
+  else if(currentFilter==='active') list=vehicles.filter(v=>progress(v)<100&&!isLate(v));
+  else if(currentFilter==='done') list=vehicles.filter(v=>progress(v)===100);
+  else if(currentFilter==='docs') list=vehicles.filter(hasDocIssue);
+  const el = document.getElementById('vlist');
+  if(!vehicles.length){
+    el.innerHTML='<div class="empty"><i class="ti ti-car"></i><div style="font-size:15px;font-weight:600;margin-bottom:6px">Aucun dossier</div><div>Cliquez "Nouveau" pour créer le premier dossier de suivi</div></div>';
+  } else if(!list.length){
+    el.innerHTML='<div class="empty"><i class="ti ti-filter"></i><div>Aucun résultat pour ce filtre</div></div>';
+  } else {
+    el.innerHTML=list.map(renderCard).join('');
+  }
+  updateStats();
+}
+
+function renderCard(v){
+  const prog=progress(v);
+  const late=isLate(v);
+  const done=prog===100;
+  const bc=done?'#1D9E75':late?'#E24B4A':'#185FA5';
+  const sb=done?'<span class="badge badge-green"><i class="ti ti-check"></i> Prêt à vendre</span>':
+    late?'<span class="badge badge-red"><i class="ti ti-alert-triangle"></i> En retard</span>':
+    '<span class="badge badge-blue"><i class="ti ti-clock"></i> En cours</span>';
+  const d=v.docs;
+  const spin='<div class="spin"></div>';
+  const cfx=d.scanning?spin:d.carfax===null?'<span class="dc-val muted">—</span>':d.carfax?'<span class="dc-val ok"><i class="ti ti-check"></i> Présent</span>':'<span class="dc-val missing"><i class="ti ti-x"></i> Manquant</span>';
+  const ins=d.scanning?spin:d.inspection===null?'<span class="dc-val muted">—</span>':d.inspection?'<span class="dc-val ok"><i class="ti ti-check"></i> Présent</span>':'<span class="dc-val warn"><i class="ti ti-alert-triangle"></i> Manquant</span>';
+  const est=d.scanning?spin:d.estimation===null?'<span class="dc-val muted">—</span>':d.estimation?'<span class="dc-val ok"><i class="ti ti-check"></i> Présent</span>':'<span class="dc-val muted"><i class="ti ti-minus"></i> Aucune</span>';
+  const driveHref=d.driveFolder?`<a href="${d.driveFolder}" target="_blank" class="btn-sm drive"><i class="ti ti-brand-google-drive" style="font-size:11px"></i> Ouvrir Drive</a>`:'';
+  const canEdit=['Serge Grenier','Nicolas Rivard'].includes(currentUser);
+  const stepsHtml=PHASES.map(ph=>{
+    const ps=v.steps.map((s,i)=>({s,i})).filter(({s})=>s.phase===ph.id);
+    if(!ps.length)return'';
+    return`<div class="phase-label"><i class="ti ${ph.icon}" style="font-size:11px"></i>${ph.label}</div>`+ps.map(({s,i})=>renderStep(v,s,i,canEdit)).join('');
+  }).join('');
+  const dateStr=new Date(v.createdAt).toLocaleDateString('fr-CA',{day:'numeric',month:'short',year:'numeric'});
+  return`<div class="vcard${late?' is-late':done?' is-done':''}" id="vc${v.id}">
+    <div class="vchead" onclick="toggle(${v.id})">
+      <div class="vinfo">
+        <div class="vtitle">
+          <span class="vname">${v.year} ${v.make} ${v.model}${v.color?' — '+v.color:''}</span>
+          ${sb}
+          ${hasDocIssue(v)&&!d.scanning?'<span class="badge badge-amber"><i class="ti ti-file-x"></i> Docs</span>':''}
+        </div>
+        <div class="vmeta">
+          <span class="stock">#${v.stock}</span>
+          <span>${Number(v.km).toLocaleString('fr-CA')} km</span>
+          <span>${Number(v.price).toLocaleString('fr-CA',{style:'currency',currency:'CAD',maximumFractionDigits:0})}</span>
+          <span>J+${v.daysAgo} · ${dateStr}</span>
+          <span>${v.resp.split('—')[0].trim()}</span>
+        </div>
+      </div>
+      <div class="pbar-wrap">
+        <div class="pbar-bg"><div class="pbar-fill" style="width:${prog}%;background:${bc}"></div></div>
+        <div class="pbar-label">${prog}% · ${doneCount(v)}/${v.steps.length} étapes</div>
+      </div>
+      <div class="vchead-actions" onclick="event.stopPropagation()">
+        <button class="btn-sm drive" onclick="checkDrive(${v.id})" ${d.scanning?'disabled':''}>${d.scanning?'<div class="spin"></div>':'<i class="ti ti-brand-google-drive" style="font-size:11px"></i>'} ${d.scanning?'…':'Drive'}</button>
+        ${canEdit?`<button class="btn-sm danger" onclick="deleteV(${v.id})" aria-label="Supprimer"><i class="ti ti-trash" style="font-size:11px"></i></button>`:''}
+        <i class="ti ti-chevron-down chev ${v.expanded?'open':''}" aria-hidden="true"></i>
+      </div>
+    </div>
+    <div class="vcbody ${v.expanded?'open':''}" id="vb${v.id}">
+      <div class="doc-checks">
+        <div class="doc-card"><div class="dc-label"><i class="ti ti-file-description" style="font-size:11px"></i> Carfax — Drive</div>${cfx}<div class="dc-file">${v.stock}_CARFAX.pdf</div></div>
+        <div class="doc-card"><div class="dc-label"><i class="ti ti-clipboard" style="font-size:11px"></i> Inspection — Drive</div>${ins}<div class="dc-file">${v.stock}.pdf</div></div>
+        <div class="doc-card"><div class="dc-label"><i class="ti ti-receipt" style="font-size:11px"></i> Estimation — Drive</div>${est}<div class="dc-file">${v.stock}-I.pdf</div></div>
+      </div>
+      ${stepsHtml}
+      <div class="card-footer">
+        <div class="card-footer-left">
+          <a href="https://www.hyundaistraymond.com/occasion/recherche.html" target="_blank" class="btn-sm"><i class="ti ti-external-link" style="font-size:11px"></i> Site web</a>
+          ${driveHref}
+        </div>
+        <span style="font-size:10px;color:var(--text-hint)">Créé le ${dateStr} · J+${v.daysAgo}</span>
+      </div>
+    </div>
+  </div>`;
+}
+
+function renderStep(v,s,i,canEdit){
+  const st=stepStatus(v,i);
+  const ico={done:'ti-check',active:'ti-clock',warn:'ti-clock',late:'ti-alert-triangle',blocked:'ti-lock'}[st]||'ti-clock';
+  const icoC={done:'done',active:'active',warn:'active',late:'late',blocked:'blocked'}[st]||'active';
+  const dl=cumDelay(v,i);
+  let dlTxt='',dlC='muted';
+  if(st==='done'){dlTxt='Complété le J+'+v.sd[i].doneDay;dlC='ok';}
+  else if(st==='blocked'){dlTxt='En attente de l\'étape précédente';}
+  else if(st==='late'){const d=v.daysAgo-dl;dlTxt='En retard de '+d+' jour'+(d>1?'s':'');dlC='late';}
+  else if(st==='warn'){dlTxt='Délai atteint aujourd\'hui';dlC='warn';}
+  else if(dl===0){dlTxt='Automatique à l\'arrivée';dlC='ok';}
+  else{const left=dl-v.daysAgo;dlTxt='Délai dans '+left+' jour'+(left>1?'s':'');dlC='ok';}
+  const canAct=canEdit&&(st==='active'||st==='warn'||st==='late')&&!v.sd[i].done;
+  const myStep=isMyStep(s);
+  const rowC=st==='late'?'step late':st==='active'||st==='warn'?'step active':'step';
+  return`<div class="${rowC}">
+    <div class="step-ico ${icoC}"><i class="ti ${ico}"></i></div>
+    <div class="step-content">
+      <div class="step-name">${s.name}${s.optional?' <span class="badge badge-gray" style="font-size:9px">optionnel</span>':''}</div>
+      <div class="step-assign"><i class="ti ti-user" style="font-size:10px"></i> ${s.assign}${dl>0?' · max J+'+dl:''}</div>
+      <div class="step-dl ${dlC}">${dlTxt}</div>
+    </div>
+    <div class="step-actions">
+      ${canAct?`<button class="btn-sm success" onclick="completeStep(${v.id},${i})"><i class="ti ti-check" style="font-size:11px"></i> Marquer fait</button>`:''}
+      ${canAct?`<button class="btn-sm" onclick="sendNotif(${v.id},${i})" title="Envoyer rappel"><i class="ti ti-bell" style="font-size:11px"></i></button>`:''}
+    </div>
+  </div>`;
+}
+
+function isMyStep(s){
+  if(!currentUser)return false;
+  const a=s.assign.toLowerCase();
+  const u=currentUser.toLowerCase();
+  return a.includes(u.split(' ')[0])||a.includes(u.split(' ')[1]||'');
+}
+
+function toggle(id){
+  const v=vehicles.find(x=>x.id===id);
+  if(v){v.expanded=!v.expanded;saveVehicles();renderAll();}
+}
+
+function deleteV(id){
+  const v=vehicles.find(x=>x.id===id);
+  if(!v||!confirm('Supprimer le dossier '+v.year+' '+v.make+' '+v.model+' (#'+v.stock+') ?'))return;
+  vehicles=vehicles.filter(x=>x.id!==id);
+  saveVehicles();renderAll();
+  showNotif('<i class="ti ti-trash"></i> Dossier #'+v.stock+' supprimé','warn');
+}
+
+function completeStep(vid,idx){
+  const v=vehicles.find(x=>x.id===vid);if(!v)return;
+  v.sd[idx].done=true;v.sd[idx].doneDay=v.daysAgo;
+  const next=v.steps[idx+1];
+  if(next){
+    const who=next.assign.split('→')[0].trim().split('/')[0].trim();
+    showNotif('<i class="ti ti-send"></i> Étape complétée — notification à <strong>'+who+'</strong> : '+next.name,'ok');
+  } else {
+    showNotif('<i class="ti ti-circle-check"></i> <strong>'+v.year+' '+v.make+' '+v.model+'</strong> (#'+v.stock+') — dossier 100% complété!','ok');
+  }
+  saveVehicles();renderAll();
+}
+
+function sendNotif(vid,idx){
+  const v=vehicles.find(x=>x.id===vid);if(!v)return;
+  const who=v.steps[idx].assign.split('→')[0].trim().split('/')[0].trim();
+  showNotif('<i class="ti ti-bell"></i> Rappel envoyé à <strong>'+who+'</strong> — '+v.steps[idx].name+' (#'+v.stock+')','info');
+}
+
+async function checkDrive(vid){
+  const v=vehicles.find(x=>x.id===vid);
+  if(!v||v.docs.scanning)return;
+  v.docs.scanning=true;renderAll();
+  try{
+    const r=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        model:'claude-sonnet-4-20250514',max_tokens:600,
+        mcp_servers:[{type:'url',url:'https://drivemcp.googleapis.com/mcp/v1',name:'google-drive'}],
+        messages:[{role:'user',content:'Cherche dans Google Drive le dossier dont le titre commence par "'+v.stock+'" dans le dossier parent ID "'+DRIVE_PARENT_ID+'". Liste ses fichiers. Réponds UNIQUEMENT en JSON sans markdown: {"folderFound":bool,"folderUrl":"url ou null","carfax":bool,"inspection":bool,"estimation":bool}'}]
+      })
+    });
+    const d=await r.json();
+    const txt=d.content?.filter(b=>b.type==='text').map(b=>b.text).join('')||'';
+    const m=txt.match(/\{[\s\S]*?\}/);
+    if(m){
+      const p=JSON.parse(m[0]);
+      v.docs.carfax=p.carfax??false;
+      v.docs.inspection=p.inspection??false;
+      v.docs.estimation=p.estimation??false;
+      v.docs.driveFolder=p.folderUrl||null;
+    }
+  }catch(e){v.docs.carfax=false;v.docs.inspection=false;v.docs.estimation=false;}
+  v.docs.scanning=false;
+  saveVehicles();renderAll();
+}
+
+async function scanAll(){
+  if(!vehicles.length)return;
+  showNotif('<div class="spin"></div> Vérification Drive pour tous les véhicules…','info',0);
+  for(const v of vehicles)if(!v.docs.scanning)await checkDrive(v.id);
+  clearNotif();
+  const issues=vehicles.filter(hasDocIssue);
+  if(issues.length)showNotif('<i class="ti ti-alert-triangle"></i> Documents manquants : '+issues.map(v=>'#'+v.stock).join(', '),'warn');
+  else showNotif('<i class="ti ti-circle-check"></i> Tous les dossiers Drive sont complets','ok');
+  saveVehicles();
+}
+
+function updateStats(){
+  document.getElementById('s-active').textContent=vehicles.filter(v=>progress(v)<100).length;
+  document.getElementById('s-done').textContent=vehicles.filter(v=>progress(v)===100).length;
+  document.getElementById('s-late').textContent=vehicles.filter(isLate).length;
+  const di=vehicles.filter(hasDocIssue).length;
+  document.getElementById('s-docs').textContent=di||'–';
+}
+
+function setFilter(f,el){
+  currentFilter=f;
+  document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));
+  el.classList.add('active');renderAll();
+}
+
+let notifTimer=null;
+function showNotif(html,type='info',dur=5000){
+  const bar=document.getElementById('notif-bar');
+  const d=document.createElement('div');
+  d.className='notif '+type;d.innerHTML=html;
+  bar.innerHTML='';bar.appendChild(d);
+  if(notifTimer)clearTimeout(notifTimer);
+  if(dur>0)notifTimer=setTimeout(()=>d.remove(),dur);
+}
+function clearNotif(){document.getElementById('notif-bar').innerHTML='';}
+
+function openModal(){document.getElementById('modal').classList.add('open');}
+function closeModal(){document.getElementById('modal').classList.remove('open');}
+
+function addVehicle(){
+  const stock=(document.getElementById('f-stk').value||'').trim().toUpperCase();
+  if(!stock){alert('Entrez un numéro de stock.');return;}
+  if(vehicles.find(v=>v.stock===stock)){alert('Le stock #'+stock+' existe déjà.');return;}
+  const year=parseInt(document.getElementById('f-yr').value)||new Date().getFullYear();
+  const make=document.getElementById('f-mk').value.trim()||'Hyundai';
+  const model=document.getElementById('f-mo').value.trim()||'Modèle';
+  const km=parseInt(document.getElementById('f-km').value)||0;
+  const price=parseInt(document.getElementById('f-pr').value)||0;
+  const color=document.getElementById('f-col').value.trim();
+  const resp=document.getElementById('f-resp').value;
+  const opts={
+    carro:document.getElementById('f-carro').checked,
+    pb:document.getElementById('f-pb').checked,
+    esthet:document.getElementById('f-esthet').checked,
+    photos:document.getElementById('f-photos').checked
+  };
+  const steps=makeSteps(opts);
+  vehicles.unshift({
+    id:nid++,stock,year,make,model,km,price,color,resp,
+    createdAt:Date.now(),daysAgo:0,opts,steps,
+    sd:steps.map(()=>({done:false,doneDay:null})),
+    docs:{carfax:null,inspection:null,estimation:null,driveFolder:null,scanning:false},
+    expanded:true
+  });
+  closeModal();
+  ['f-stk','f-yr','f-mk','f-mo','f-km','f-pr','f-col'].forEach(id=>{document.getElementById(id).value='';});
+  saveVehicles();renderAll();
+  showNotif('<i class="ti ti-check"></i> Dossier créé — <strong>'+year+' '+make+' '+model+'</strong> (#'+stock+')','ok');
+}
+
+const saved=sessionStorage.getItem('vo-user');
+if(saved){currentUser=saved;showApp();}
+</script>
+</body>
+</html>
