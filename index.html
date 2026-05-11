@@ -413,7 +413,8 @@ function saveVehicles(){
         km:v.km,price:v.price,color:v.color||'',resp:v.resp,
         createdAt:v.createdAt,opts:v.opts,sd:v.sd,expanded:v.expanded,
         docs:{carfax:v.docs.carfax,inspection:v.docs.inspection,
-              estimation:v.docs.estimation,driveFolder:v.docs.driveFolder||null}
+              estimation:v.docs.estimation,driveFolder:v.docs.driveFolder||null,
+              enligne:v.docs.enligne,photos:v.docs.photos,ficheUrl:v.docs.ficheUrl||null}
       }));
       localStorage.setItem(STORAGE_KEY, JSON.stringify({vehicles:toSave,nid,savedAt:new Date().toISOString()}));
       setSaveInd('ok');
@@ -433,7 +434,8 @@ function loadVehicles(){
         return{...s,steps,color:s.color||'',
           daysAgo:calcDaysAgo(s.createdAt),
           docs:{carfax:s.docs?.carfax??null,inspection:s.docs?.inspection??null,
-                estimation:s.docs?.estimation??null,driveFolder:s.docs?.driveFolder||null,scanning:false}};
+                estimation:s.docs?.estimation??null,driveFolder:s.docs?.driveFolder||null,scanning:false,
+                enligne:s.docs?.enligne??null,photos:s.docs?.photos??null,ficheUrl:s.docs?.ficheUrl||null,scanningWeb:false}};
       });
       setSaveInd('ok', vehicles.length+' dossier'+(vehicles.length>1?'s':'')+' chargé'+(vehicles.length>1?'s':''));
     } else {
@@ -535,6 +537,8 @@ function renderCard(v){
   const cfx=d.scanning?spin:d.carfax===null?'<span class="dc-val muted">—</span>':d.carfax?'<span class="dc-val ok"><i class="ti ti-check"></i> Présent</span>':'<span class="dc-val missing"><i class="ti ti-x"></i> Manquant</span>';
   const ins=d.scanning?spin:d.inspection===null?'<span class="dc-val muted">—</span>':d.inspection?'<span class="dc-val ok"><i class="ti ti-check"></i> Présent</span>':'<span class="dc-val warn"><i class="ti ti-alert-triangle"></i> Manquant</span>';
   const est=d.scanning?spin:d.estimation===null?'<span class="dc-val muted">—</span>':d.estimation?'<span class="dc-val ok"><i class="ti ti-check"></i> Présent</span>':'<span class="dc-val muted"><i class="ti ti-minus"></i> Aucune</span>';
+  const webStatus=d.scanningWeb?spin:d.enligne===null?'<span class="dc-val muted">—</span>':d.enligne?'<span class="dc-val ok"><i class="ti ti-check"></i> En ligne</span>':'<span class="dc-val missing"><i class="ti ti-x"></i> Non trouvé</span>';
+  const photosStatus=d.scanningWeb?spin:d.enligne===null?'<span class="dc-val muted">—</span>':d.photos>0?'<span class="dc-val ok"><i class="ti ti-camera"></i> '+d.photos+' photos</span>':'<span class="dc-val missing"><i class="ti ti-camera-off"></i> Aucune photo</span>';
   const driveHref=d.driveFolder?`<a href="${d.driveFolder}" target="_blank" class="btn-sm drive"><i class="ti ti-brand-google-drive" style="font-size:11px"></i> Ouvrir Drive</a>`:'';
   const canEdit=['Serge Grenier','Nicolas Rivard'].includes(currentUser);
   const stepsHtml=PHASES.map(ph=>{
@@ -565,12 +569,15 @@ function renderCard(v){
       </div>
       <div class="vchead-actions" onclick="event.stopPropagation()">
         <button class="btn-sm drive" onclick="checkDrive(${v.id})" ${d.scanning?'disabled':''}>${d.scanning?'<div class="spin"></div>':'<i class="ti ti-brand-google-drive" style="font-size:11px"></i>'} ${d.scanning?'…':'Drive'}</button>
+        <button class="btn-sm" style="border-color:#0ea5e9;color:#0369a1" onclick="checkWeb(${v.id})" ${d.scanningWeb?'disabled':''}>${d.scanningWeb?'<div class="spin"></div>':'<i class="ti ti-world" style="font-size:11px"></i>'} ${d.scanningWeb?'…':'Web'}</button>
         ${canEdit?`<button class="btn-sm danger" onclick="deleteV(${v.id})" aria-label="Supprimer"><i class="ti ti-trash" style="font-size:11px"></i></button>`:''}
         <i class="ti ti-chevron-down chev ${v.expanded?'open':''}" aria-hidden="true"></i>
       </div>
     </div>
     <div class="vcbody ${v.expanded?'open':''}" id="vb${v.id}">
-      <div class="doc-checks">
+      <div class="doc-checks" style="grid-template-columns:repeat(auto-fit,minmax(130px,1fr))">
+        <div class="doc-card"><div class="dc-label"><i class="ti ti-world" style="font-size:11px"></i> Site web</div>${webStatus}${d.ficheUrl?'<div class="dc-file"><a href="'+d.ficheUrl+'" target="_blank" style="color:var(--blue-mid);font-size:10px">Voir la fiche</a></div>':''}</div>
+        <div class="doc-card"><div class="dc-label"><i class="ti ti-camera" style="font-size:11px"></i> Photos en ligne</div>${photosStatus}</div>
         <div class="doc-card"><div class="dc-label"><i class="ti ti-file-description" style="font-size:11px"></i> Carfax — Drive</div>${cfx}<div class="dc-file">${v.stock}_CARFAX.pdf</div></div>
         <div class="doc-card"><div class="dc-label"><i class="ti ti-clipboard" style="font-size:11px"></i> Inspection — Drive</div>${ins}<div class="dc-file">${v.stock}.pdf</div></div>
         <div class="doc-card"><div class="dc-label"><i class="ti ti-receipt" style="font-size:11px"></i> Estimation — Drive</div>${est}<div class="dc-file">${v.stock}-I.pdf</div></div>
@@ -682,10 +689,29 @@ async function checkDrive(vid){
   saveVehicles();renderAll();
 }
 
+async function checkWeb(vid){
+  const v=vehicles.find(x=>x.id===vid);
+  if(!v||v.docs.scanningWeb)return;
+  v.docs.scanningWeb=true;renderAll();
+  try{
+    const r=await fetch('/api/check-web',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({stock:v.stock})});
+    if(!r.ok)throw new Error('Erreur '+r.status);
+    const p=await r.json();
+    v.docs.enligne=p.enligne;
+    v.docs.photos=p.photos;
+    v.docs.ficheUrl=p.ficheUrl||null;
+  }catch(e){v.docs.enligne=false;v.docs.photos=0;}
+  v.docs.scanningWeb=false;
+  saveVehicles();renderAll();
+}
+
 async function scanAll(){
   if(!vehicles.length)return;
   showNotif('<div class="spin"></div> Vérification Drive pour tous les véhicules…','info',0);
-  for(const v of vehicles)if(!v.docs.scanning)await checkDrive(v.id);
+  for(const v of vehicles){
+    if(!v.docs.scanning) await checkDrive(v.id);
+    if(!v.docs.scanningWeb) await checkWeb(v.id);
+  }
   clearNotif();
   const issues=vehicles.filter(hasDocIssue);
   if(issues.length)showNotif('<i class="ti ti-alert-triangle"></i> Documents manquants : '+issues.map(v=>'#'+v.stock).join(', '),'warn');
@@ -743,7 +769,7 @@ function addVehicle(){
     id:nid++,stock,year,make,model,km,price,color,resp,
     createdAt:Date.now(),daysAgo:0,opts,steps,
     sd:steps.map(()=>({done:false,doneDay:null})),
-    docs:{carfax:null,inspection:null,estimation:null,driveFolder:null,scanning:false},
+    docs:{carfax:null,inspection:null,estimation:null,driveFolder:null,scanning:false,enligne:null,photos:null,ficheUrl:null,scanningWeb:false},
     expanded:true
   });
   closeModal();
