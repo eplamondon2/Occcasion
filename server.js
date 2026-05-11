@@ -116,7 +116,7 @@ app.post('/api/check-web', async (req, res) => {
       const searchIdx = html.indexOf(stockUp);
       if (searchIdx !== -1) {
         const before = html.substring(Math.max(0, searchIdx - 2000), searchIdx + 500);
-        const urlMatch = before.match(/href="(/occasion/[^"]+idd+.html)"/);
+        const urlMatch = before.match(/href="(\/occasion\/[^"]+id\d+\.html)"/);
         if (urlMatch) {
           ficheUrl = 'https://www.hyundaistraymond.com' + urlMatch[1];
           try {
