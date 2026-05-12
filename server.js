@@ -7,7 +7,13 @@ const PORT = process.env.PORT || 3000;
 app.use(express.json({ limit: '50mb' }));
 app.use(express.static(path.join(__dirname)));
 
-const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
+const poolConfig = { connectionString: process.env.DATABASE_URL };
+if (process.env.DATABASE_URL && process.env.DATABASE_URL.includes('railway')) {
+  poolConfig.ssl = { rejectUnauthorized: false };
+} else if (process.env.DATABASE_URL && process.env.DATABASE_URL.includes('postgres')) {
+  poolConfig.ssl = { rejectUnauthorized: false };
+}
+const pool = new Pool(poolConfig);
 
 const TEAM_EMAILS = {
   'Etienne Plamondon': 'eplamondon@hyundaistraymond.ca',
@@ -20,32 +26,50 @@ const TEAM_EMAILS = {
 };
 
 async function initDB() {
-  try {
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS vehicles (
-        id SERIAL PRIMARY KEY,
-        stock VARCHAR(50) UNIQUE NOT NULL,
-        year INTEGER, make VARCHAR(100), model VARCHAR(200),
-        km INTEGER, price INTEGER, color VARCHAR(100), resp VARCHAR(200),
-        opts JSONB DEFAULT '{}', sd JSONB DEFAULT '[]', docs JSONB DEFAULT '{}',
-        expanded BOOLEAN DEFAULT false,
-        created_at TIMESTAMP DEFAULT NOW(), updated_at TIMESTAMP DEFAULT NOW()
-      )
-    `);
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS comments (
-        id SERIAL PRIMARY KEY,
-        stock VARCHAR(50) NOT NULL,
-        step_id VARCHAR(100),
-        author VARCHAR(200),
-        message TEXT,
-        created_at TIMESTAMP DEFAULT NOW()
-      )
-    `);
-    console.log('DB ready');
-  } catch (err) { console.error('DB init error:', err.message); }
+  let retries = 5;
+  while (retries > 0) {
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS vehicles (
+          id SERIAL PRIMARY KEY,
+          stock VARCHAR(50) UNIQUE NOT NULL,
+          year INTEGER, make VARCHAR(100), model VARCHAR(200),
+          km INTEGER, price INTEGER, color VARCHAR(100), resp VARCHAR(200),
+          opts JSONB DEFAULT '{}', sd JSONB DEFAULT '[]', docs JSONB DEFAULT '{}',
+          expanded BOOLEAN DEFAULT false,
+          created_at TIMESTAMP DEFAULT NOW(), updated_at TIMESTAMP DEFAULT NOW()
+        )
+      `);
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS comments (
+          id SERIAL PRIMARY KEY,
+          stock VARCHAR(50) NOT NULL,
+          step_id VARCHAR(100),
+          author VARCHAR(200),
+          message TEXT,
+          created_at TIMESTAMP DEFAULT NOW()
+        )
+      `);
+      console.log('DB ready');
+      return;
+    } catch (err) {
+      retries--;
+      console.error('DB init error (retries left: '+retries+'):', err.message, err.code);
+      if (retries > 0) await new Promise(r => setTimeout(r, 3000));
+    }
+  }
 }
 initDB();
+
+// HEALTH CHECK
+app.get('/api/health', async (req, res) => {
+  try {
+    const r = await pool.query('SELECT NOW() as time, current_database() as db');
+    res.json({ ok: true, time: r.rows[0].time, db: r.rows[0].db });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
 
 // VEHICLES CRUD
 app.get('/api/vehicles', async (req, res) => {
