@@ -298,63 +298,40 @@ app.post('/api/check-web', async (req, res) => {
   const { stock } = req.body;
   if (!stock) return res.status(400).json({ error: 'stock requis' });
   try {
-    const stockUp = stock.toUpperCase();
     const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36';
-
-    // Fetch D2C inventory JSON
     const invRes = await fetch('https://www.hyundaistraymond.com/js/json/chatboost/inventory/inventory-index.json', {
-      headers: { 'User-Agent': UA },
-      signal: AbortSignal.timeout(12000)
+      headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(15000)
     });
     const inventory = await invRes.json();
-
-    // Find vehicle by stock number
     const vehicle = inventory.find(function(v) {
-      return (v['stock number'] || '').toUpperCase() === stockUp;
+      return (v['stock number'] || '').toUpperCase() === stock.toUpperCase();
     });
-
-    if (!vehicle) {
-      return res.json({ enligne: false, photos: 0, ficheUrl: null });
-    }
+    if (!vehicle) return res.json({ enligne: false, photos: 0, ficheUrl: null });
 
     const d2cId = vehicle['D2C Vehicle ID'];
-    const ficheUrl = (vehicle['Vehicle Details Page (VDP)'] || '').replace('/used/','/occasion/') || null;
-    const enligne = true;
-
-    // Count photos by trying CDN URLs
+    const ficheUrl = (vehicle['Vehicle Details Page (VDP)'] || '').replace('/used/', '/occasion/') || null;
     let photos = 0;
-    if (d2cId) {
-      // Get CDN token from main picture URL
-      const mainPic = vehicle['main picture'] || '';
-      const tokenMatch = mainPic.match(new RegExp('imagescdn\.d2cmedia\.ca\/([^\/]+)\/1918\/'));
-      const token = tokenMatch ? tokenMatch[1] : null;
 
-      if (token) {
-        // Count photos by checking URLs sequentially
-        let i = 1;
-        let found = true;
-        while (found && i <= 60) {
-          try {
-            // D2C format: /token/1918/vehicleId/photoIndex/Make-Model-Year.jpg
-            const makes = (vehicle.make||'').replace(/ /g,'_');
-            const models = (vehicle.model||'').replace(/ /g,'_');
-            const yr = vehicle.year||'';
-            const photoUrl = 'https://imagescdn.d2cmedia.ca/' + token + '/1918/' + d2cId + '/' + i + '/' + makes + '-' + models + '-' + yr + '.jpg';
-            const r = await fetch(photoUrl, { method: 'HEAD', signal: AbortSignal.timeout(4000) });
-            if (r.status === 200) {
-              photos = i;
-              i++;
-            } else {
-              found = false;
-            }
-          } catch(e) {
-            found = false;
-          }
-        }
+    // Get token from main picture
+    const mainPic = vehicle['main picture'] || '';
+    const tokenMatch = mainPic.match(new RegExp('imagescdn\.d2cmedia\.ca\/([^\/]+)\/1918\/'));
+    const token = tokenMatch ? tokenMatch[1] : null;
+
+    if (token && d2cId) {
+      const make = (vehicle.make || '').replace(/ /g,'_');
+      const model = (vehicle.model || '').replace(/ /g,'_');
+      const year = vehicle.year || '';
+      let i = 1, found = true;
+      while (found && i <= 60) {
+        try {
+          const url = 'https://imagescdn.d2cmedia.ca/' + token + '/1918/' + d2cId + '/' + i + '/' + make + '-' + model + '-' + year + '.jpg';
+          const r = await fetch(url, { method: 'HEAD', signal: AbortSignal.timeout(4000) });
+          if (r.status === 200) { photos = i; i++; } else { found = false; }
+        } catch(e) { found = false; }
       }
     }
 
-    return res.json({ enligne: enligne, photos: photos, ficheUrl: ficheUrl, d2cId: d2cId });
+    return res.json({ enligne: true, photos: photos, ficheUrl: ficheUrl, d2cId: d2cId, token: token });
   } catch (err) {
     console.error('check-web:', err.message);
     res.status(500).json({ error: err.message });
