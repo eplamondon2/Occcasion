@@ -179,6 +179,20 @@ header{background:var(--blue);color:white;padding:0 20px;height:56px;display:fle
 .spin{display:inline-block;width:12px;height:12px;border:2px solid var(--border);border-top-color:var(--blue-mid);border-radius:50%;animation:sp .7s linear infinite}
 @keyframes sp{to{transform:rotate(360deg)}}
 
+/* COMMENTS */
+.comments-section{margin-top:12px;border-top:1px solid var(--border);padding-top:12px}
+.comments-title{font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;display:flex;align-items:center;gap:5px}
+.comment-item{background:var(--border-light);border-radius:var(--radius-sm);padding:8px 10px;margin-bottom:6px;border-left:3px solid var(--blue)}
+.comment-author{font-size:11px;font-weight:600;color:var(--blue-mid)}
+.comment-step{font-size:10px;color:var(--text-muted);margin-left:6px}
+.comment-date{font-size:10px;color:var(--text-hint);float:right}
+.comment-msg{font-size:12px;margin-top:3px;color:var(--text)}
+.comment-form{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
+.comment-form select{font-size:12px;padding:6px 8px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);color:var(--text);flex:0 0 auto}
+.comment-form input{flex:1;min-width:200px;padding:6px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:12px;background:var(--bg);color:var(--text)}
+.comment-form input:focus,.comment-form select:focus{border-color:var(--blue-mid);outline:none}
+.comment-send{padding:6px 12px;background:var(--blue);color:white;border:none;border-radius:var(--radius-sm);font-size:12px;cursor:pointer;white-space:nowrap}
+.comment-send:hover{background:#002266}
 /* MOBILE */
 @media(max-width:600px){
   .stats{grid-template-columns:1fr 1fr}
@@ -200,6 +214,7 @@ header{background:var(--blue);color:white;padding:0 20px;height:56px;display:fle
       <label>Votre nom</label>
       <select id="login-user">
         <option value="">— Sélectionnez —</option>
+        <option value="Etienne Plamondon">Etienne Plamondon — Directeur Général</option>
         <option value="Serge Grenier">Serge Grenier — Directeur des ventes</option>
         <option value="Nicolas Rivard">Nicolas Rivard — Directeur adjoint</option>
         <option value="Martin Napier">Martin Napier — Esthétique</option>
@@ -318,12 +333,13 @@ const STORAGE_KEY = 'vo-hsr-vehicles-v2';
 const ANTHROPIC_KEY_PLACEHOLDER = 'VOTRE_CLE_API_ANTHROPIC';
 
 const TEAM = {
-  'Serge Grenier': {role:'Directeur des ventes', initials:'SG'},
-  'Nicolas Rivard': {role:'Directeur adjoint', initials:'NR'},
-  'Martin Napier': {role:'Esthétique', initials:'MN'},
-  'Nicolas Fiset': {role:'Esthétique', initials:'NF'},
-  'Charles Boivin': {role:'Photos', initials:'CB'},
-  'Vincent Bouchard': {role:'Dir. pièces / Inspection', initials:'VB'},
+  'Etienne Plamondon': {role:'Directeur Général', initials:'EP', email:'eplamondon@hyundaistraymond.ca'},
+  'Serge Grenier': {role:'Directeur des ventes', initials:'SG', email:'serge.grenier@hyundaistraymond.ca'},
+  'Nicolas Rivard': {role:'Directeur adjoint', initials:'NR', email:'nrivard@hyundaistraymond.ca'},
+  'Martin Napier': {role:'Esthétique', initials:'MN', email:'livraison@hyundaistraymond.ca'},
+  'Nicolas Fiset': {role:'Esthétique', initials:'NF', email:'autofiset@outlook.com'},
+  'Charles Boivin': {role:'Photos', initials:'CB', email:'charles.boivin@hyundaistraymond.ca'},
+  'Vincent Bouchard': {role:'Dir. pièces / Inspection', initials:'VB', email:'vbouchard@hyundaistraymond.ca'},
 };
 
 const STEPS_DEF = [
@@ -377,7 +393,7 @@ function showApp(){
   const info = TEAM[currentUser]||{};
   document.getElementById('header-username').textContent = currentUser + (info.role?' — '+info.role:'');
   document.getElementById('header-avatar').textContent = info.initials||currentUser[0];
-  const canEdit = ['Serge Grenier','Nicolas Rivard'].includes(currentUser);
+  const canEdit = ['Etienne Plamondon','Serge Grenier','Nicolas Rivard'].includes(currentUser);
   document.getElementById('btn-add').style.display = canEdit?'inline-flex':'none';
   const isFieldWorker = ['Martin Napier','Nicolas Fiset','Charles Boivin','Vincent Bouchard'].includes(currentUser);
   if(isFieldWorker){ currentFilter='mine'; }
@@ -550,7 +566,7 @@ function renderCard(v){
   const webStatus=d.scanningWeb?spin:d.enligne===null?'<span class="dc-val muted">—</span>':d.enligne?'<span class="dc-val ok"><i class="ti ti-check"></i> En ligne</span>':'<span class="dc-val missing"><i class="ti ti-x"></i> Non trouvé</span>';
   const photosStatus=d.scanningWeb?spin:d.enligne===null?'<span class="dc-val muted">—</span>':d.photos>0?'<span class="dc-val ok"><i class="ti ti-camera"></i> '+d.photos+' photos</span>':'<span class="dc-val missing"><i class="ti ti-camera-off"></i> Aucune photo</span>';
   const driveHref=d.driveFolder?`<a href="${d.driveFolder}" target="_blank" class="btn-sm drive"><i class="ti ti-brand-google-drive" style="font-size:11px"></i> Ouvrir Drive</a>`:'';
-  const canEdit=['Serge Grenier','Nicolas Rivard'].includes(currentUser);
+  const canEdit=['Etienne Plamondon','Serge Grenier','Nicolas Rivard'].includes(currentUser);
   const stepsHtml=PHASES.map(ph=>{
     const ps=v.steps.map((s,i)=>({s,i})).filter(({s})=>s.phase===ph.id);
     if(!ps.length)return'';
@@ -593,6 +609,18 @@ function renderCard(v){
         <div class="doc-card"><div class="dc-label"><i class="ti ti-receipt" style="font-size:11px"></i> Estimation — Drive</div>${est}<div class="dc-file">${v.stock}-I.pdf</div></div>
       </div>
       ${stepsHtml}
+      <div class="comments-section">
+        <div class="comments-title"><i class="ti ti-message-circle" style="font-size:12px"></i> Commentaires & notes <span id="cc-${v.id}" style="background:var(--blue);color:white;border-radius:20px;padding:1px 7px;font-size:10px;margin-left:4px">…</span></div>
+        <div id="comments-${v.id}"></div>
+        <div class="comment-form">
+          <select id="cstep-${v.id}">
+            <option value="">— Étape concernée —</option>
+            ${v.steps.map(s=>`<option value="${s.id}">${s.name}</option>`).join('')}
+          </select>
+          <input type="text" id="cmsg-${v.id}" placeholder="Votre commentaire ou note…" onkeydown="if(event.key==='Enter')addComment(${v.id})">
+          <button class="comment-send" onclick="addComment(${v.id})"><i class="ti ti-send" style="font-size:12px"></i> Envoyer</button>
+        </div>
+      </div>
       <div class="card-footer">
         <div class="card-footer-left">
           <a href="https://www.hyundaistraymond.com/occasion/recherche.html" target="_blank" class="btn-sm"><i class="ti ti-external-link" style="font-size:11px"></i> Site web</a>
@@ -620,7 +648,7 @@ function renderStep(v,s,i,canEdit){
   else if(st==='warn'){dlTxt='Délai atteint aujourd\'hui';dlC='warn';}
   else if(dl===0){dlTxt='Automatique à l\'arrivée';dlC='ok';}
   else{const left=dl-v.daysAgo;dlTxt='Délai dans '+left+' jour'+(left>1?'s':'');dlC='ok';}
-  const isDir=['Serge Grenier','Nicolas Rivard'].includes(currentUser);
+  const isDir=['Etienne Plamondon','Serge Grenier','Nicolas Rivard'].includes(currentUser);
   const myStep=isMyStep(s);
   const myStepIds=ROLE_STEPS[currentUser]||[];
   const isMyOwnStep=myStepIds.includes(s.id);
@@ -650,7 +678,11 @@ function isMyStep(s){
 
 function toggle(id){
   const v=vehicles.find(x=>x.id===id);
-  if(v){v.expanded=!v.expanded;saveVehicles();renderAll();}
+  if(v){
+    v.expanded=!v.expanded;
+    saveVehicles();renderAll();
+    if(v.expanded) setTimeout(()=>loadComments(id),100);
+  }
 }
 
 async function deleteV(id){
@@ -670,13 +702,24 @@ function uncompleteStep(vid,idx){
   showNotif('<i class="ti ti-arrow-back"></i> Étape annulée','warn');
 }
 
-function completeStep(vid,idx){
+async function completeStep(vid,idx){
   const v=vehicles.find(x=>x.id===vid);if(!v)return;
   v.sd[idx].done=true;v.sd[idx].doneDay=v.daysAgo;
   const next=v.steps[idx+1];
   if(next){
     const who=next.assign.split('→')[0].trim().split('/')[0].trim();
-    showNotif('<i class="ti ti-send"></i> Étape complétée — notification à <strong>'+who+'</strong> : '+next.name,'ok');
+    showNotif('<i class="ti ti-send"></i> Étape complétée — courriel envoyé à <strong>'+who+'</strong>','ok');
+    const assignees=next.assign.split(/[→/]/).map(a=>a.trim());
+    for(const assignee of assignees){
+      const recipientName=Object.keys(TEAM).find(name=>assignee.toLowerCase().includes(name.split(' ')[0].toLowerCase()));
+      if(recipientName&&recipientName!==currentUser){
+        const email=TEAM[recipientName]?.email;
+        if(email){
+          const html='<div style="font-family:sans-serif;max-width:520px;margin:0 auto"><div style="background:#003087;color:white;padding:16px 20px;border-radius:8px 8px 0 0"><h2 style="margin:0;font-size:16px">Hyundai St-Raymond — Occasion</h2></div><div style="background:#f8fafc;padding:20px;border:1px solid #e2e8f0;border-top:0;border-radius:0 0 8px 8px"><p>Bonjour <strong>'+recipientName+'</strong>,</p><p><strong>'+currentUser+'</strong> a complété une étape — votre intervention est requise.</p><div style="background:white;border-left:4px solid #003087;padding:12px 16px;border-radius:4px;margin:16px 0"><p style="margin:0 0 4px;font-size:12px;color:#64748b">Prochaine étape</p><p style="margin:0;font-weight:600">'+next.name+'</p></div><table style="font-size:13px;width:100%"><tr><td style="color:#64748b;padding:4px 0">Véhicule</td><td><strong>'+v.year+' '+v.make+' '+v.model+'</strong> (#'+v.stock+')</td></tr><tr><td style="color:#64748b;padding:4px 0">Kilométrage</td><td>'+Number(v.km).toLocaleString('fr-CA')+' km</td></tr></table><div style="margin-top:20px;text-align:center"><a href="https://occcasion-production.up.railway.app" style="background:#003087;color:white;padding:10px 20px;border-radius:6px;text-decoration:none">Voir le tableau de bord</a></div></div></div>';
+          await fetch('/api/notify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({to:email,subject:'[VO #'+v.stock+'] Action requise — '+next.name,html:html})}).catch(e=>console.error('email:',e));
+        }
+      }
+    }
   } else {
     showNotif('<i class="ti ti-circle-check"></i> <strong>'+v.year+' '+v.make+' '+v.model+'</strong> (#'+v.stock+') — dossier 100% complété!','ok');
   }
@@ -790,6 +833,86 @@ async function uploadFile(vid, type){
   };
   input.click();
 }
+
+// Load comments for a vehicle
+async function loadComments(vid){
+  const v=vehicles.find(x=>x.id===vid);if(!v)return;
+  try{
+    const r=await fetch('/api/comments/'+v.stock);
+    const comments=await r.json();
+    const el=document.getElementById('comments-'+vid);
+    const ct=document.getElementById('cc-'+vid);
+    if(ct)ct.textContent=comments.length;
+    if(!el)return;
+    if(!comments.length){el.innerHTML='<div style="font-size:12px;color:var(--text-hint);padding:4px 0">Aucun commentaire</div>';return;}
+    el.innerHTML=comments.map(c=>{
+      const d=new Date(c.created_at).toLocaleDateString('fr-CA',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
+      const stepName=c.step_id?v.steps.find(s=>s.id===c.step_id)?.name||c.step_id:'';
+      return '<div class="comment-item">'
+        +'<span class="comment-author">'+c.author+'</span>'
+        +(stepName?'<span class="comment-step">— '+stepName+'</span>':'')
+        +'<span class="comment-date">'+d+'</span>'
+        +'<div class="comment-msg">'+c.message+'</div>'
+        +'</div>';
+    }).join('');
+  }catch(e){console.error('loadComments:',e);}
+}
+
+async function addComment(vid){
+  const v=vehicles.find(x=>x.id===vid);if(!v)return;
+  const msgEl=document.getElementById('cmsg-'+vid);
+  const stepEl=document.getElementById('cstep-'+vid);
+  const message=(msgEl?.value||'').trim();
+  if(!message)return;
+  const stepId=stepEl?.value||'';
+  try{
+    await fetch('/api/comments',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({stock:v.stock,stepId:stepId,author:currentUser,message:message})});
+    msgEl.value='';
+    await loadComments(vid);
+
+    // Send email notification if step is assigned
+    if(stepId){
+      const step=v.steps.find(s=>s.id===stepId);
+      if(step){
+        const assignees=step.assign.split(/[→\/]/).map(a=>a.trim());
+        for(const assignee of assignees){
+          const recipientName=Object.keys(TEAM).find(name=>assignee.toLowerCase().includes(name.split(' ')[0].toLowerCase()));
+          if(recipientName&&recipientName!==currentUser){
+            const email=TEAM[recipientName]?.email;
+            if(email) await sendEmailNotification(email,recipientName,currentUser,v,step.name,message);
+          }
+        }
+      }
+    }
+    showNotif('<i class="ti ti-message-circle"></i> Commentaire ajouté','ok');
+  }catch(e){showNotif('<i class="ti ti-alert-triangle"></i> Erreur: '+e.message,'warn');}
+}
+
+async function sendEmailNotification(toEmail,toName,fromName,vehicle,stepName,comment){
+  const subject='[VO #'+vehicle.stock+'] Note — '+stepName;
+  const html='<div style="font-family:sans-serif;max-width:520px;margin:0 auto">'
+    +'<div style="background:#003087;color:white;padding:16px 20px;border-radius:8px 8px 0 0">'
+    +'<h2 style="margin:0;font-size:16px">Hyundai St-Raymond — Occasion</h2></div>'
+    +'<div style="background:#f8fafc;padding:20px;border:1px solid #e2e8f0;border-top:0;border-radius:0 0 8px 8px">'
+    +'<p style="margin:0 0 12px"><strong>'+fromName+'</strong> vous a laissé une note :</p>'
+    +'<div style="background:white;border-left:4px solid #003087;padding:12px 16px;border-radius:4px;margin-bottom:16px">'
+    +'<p style="margin:0;font-style:italic">'+comment+'</p></div>'
+    +'<table style="width:100%;border-collapse:collapse;font-size:13px">'
+    +'<tr><td style="padding:6px 0;color:#64748b">Véhicule</td><td><strong>'+vehicle.year+' '+vehicle.make+' '+vehicle.model+'</strong> (#'+vehicle.stock+')</td></tr>'
+    +'<tr><td style="padding:6px 0;color:#64748b">Étape</td><td>'+stepName+'</td></tr>'
+    +'</table>'
+    +'<div style="margin-top:20px;text-align:center">'
+    +'<a href="https://occcasion-production.up.railway.app" style="background:#003087;color:white;padding:10px 20px;border-radius:6px;text-decoration:none;font-size:13px">Voir le tableau de bord</a>'
+    +'</div></div></div>';
+  try{
+    await fetch('/api/notify',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({to:toEmail,toName:toName,subject:subject,html:html})});
+  }catch(e){console.error('Email error:',e);}
+}
+
+// Load comments when card is expanded
+const originalToggle = toggle;
 
 async function scanAll(){
   if(!vehicles.length)return;
