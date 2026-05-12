@@ -138,36 +138,68 @@ app.post('/api/comments', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// SEND EMAIL via Brevo API (HTTP)
+// SEND EMAIL via Microsoft 365 Graph API (HTTP - no SMTP port needed)
 app.post('/api/notify', async (req, res) => {
   const { to, subject, html } = req.body;
   if (!to) return res.status(400).json({ error: 'Destinataire requis' });
-  const apiKey = process.env.BREVO_API_KEY;
-  if (!apiKey) return res.status(500).json({ error: 'BREVO_API_KEY non configuré' });
+  const clientId = process.env.MS_CLIENT_ID;
+  const clientSecret = process.env.MS_CLIENT_SECRET;
+  const tenantId = process.env.MS_TENANT_ID;
+  if (!clientId || !clientSecret || !tenantId) {
+    // Fallback: Brevo API
+    const apiKey = process.env.BREVO_API_KEY;
+    if (!apiKey) return res.status(500).json({ error: 'Configuration email manquante' });
+    try {
+      const r = await fetch('https://api.brevo.com/v3/smtp/email', {
+        method: 'POST',
+        headers: { 'accept': 'application/json', 'api-key': apiKey, 'content-type': 'application/json' },
+        body: JSON.stringify({
+          sender: { name: 'Hyundai St-Raymond VO', email: 'hyundaistraymondusages@gmail.com' },
+          to: [{ email: to }],
+          subject: subject || 'Notification — Mise en marché VO',
+          htmlContent: html
+        })
+      });
+      const data = await r.json();
+      if (data.messageId) return res.json({ sent: true, id: data.messageId });
+      return res.status(502).json({ error: 'Erreur Brevo', detail: data });
+    } catch (err) { return res.status(502).json({ error: err.message }); }
+  }
   try {
-    const r = await fetch('https://api.brevo.com/v3/smtp/email', {
+    // Get access token from Microsoft
+    const tokenRes = await fetch('https://login.microsoftonline.com/' + tenantId + '/oauth2/v2.0/token', {
       method: 'POST',
-      headers: {
-        'accept': 'application/json',
-        'api-key': apiKey,
-        'content-type': 'application/json'
-      },
-      body: JSON.stringify({
-        sender: { name: 'Hyundai St-Raymond VO', email: 'hyundaistraymondusages@gmail.com' },
-        to: [{ email: to }],
-        subject: subject || 'Notification — Mise en marché VO',
-        htmlContent: html
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id: clientId,
+        client_secret: clientSecret,
+        scope: 'https://graph.microsoft.com/.default',
+        grant_type: 'client_credentials'
       })
     });
-    const data = await r.json();
-    if (data.messageId) {
-      res.json({ sent: true, id: data.messageId });
+    const tokenData = await tokenRes.json();
+    if (!tokenData.access_token) throw new Error('Token Microsoft invalide: ' + JSON.stringify(tokenData));
+
+    // Send email via Graph API
+    const sendRes = await fetch('https://graph.microsoft.com/v1.0/users/' + process.env.O365_EMAIL + '/sendMail', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + tokenData.access_token, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: {
+          subject: subject || 'Notification — Mise en marché VO',
+          body: { contentType: 'HTML', content: html },
+          toRecipients: [{ emailAddress: { address: to } }]
+        }
+      })
+    });
+    if (sendRes.status === 202) {
+      res.json({ sent: true, id: 'graph-' + Date.now() });
     } else {
-      console.error('Brevo error:', JSON.stringify(data));
-      res.status(502).json({ error: 'Erreur Brevo', detail: data });
+      const err = await sendRes.json();
+      res.status(502).json({ error: 'Erreur Graph API', detail: err });
     }
   } catch (err) {
-    console.error('Email error:', err.message);
+    console.error('Graph API error:', err.message);
     res.status(502).json({ error: err.message });
   }
 });
@@ -268,26 +300,49 @@ app.post('/api/check-web', async (req, res) => {
   try {
     const stockUp = stock.toUpperCase();
     const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36';
-    const html = new TextDecoder('iso-8859-1').decode(await (await fetch('https://www.hyundaistraymond.com/occasion/recherche.html', { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(12000) })).arrayBuffer());
-    const enligne = html.includes(stockUp) || html.includes(stock);
+    const listHtml = new TextDecoder('iso-8859-1').decode(
+      await (await fetch('https://www.hyundaistraymond.com/occasion/recherche.html', {
+        headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(12000)
+      })).arrayBuffer()
+    );
+    // D2C formats: "Stock:7572AA", "(Stock:7572AA)", "(7572AA)", "7572AA"
+    const patterns = ['Stock:'+stockUp, 'Stock: '+stockUp, '('+stockUp+')', stockUp, stock];
+    const enligne = patterns.some(function(p) { return listHtml.includes(p); });
     let photos = 0, ficheUrl = null;
     if (enligne) {
-      const idx = html.indexOf(stockUp) !== -1 ? html.indexOf(stockUp) : html.indexOf(stock);
-      const win = html.substring(Math.max(0,idx-3000), Math.min(html.length,idx+1000));
-      const urlMatch = win.match(new RegExp('href="(/occasion/[^"]+id[0-9]+\\.html)"'));
-      if (urlMatch) {
-        ficheUrl = 'https://www.hyundaistraymond.com' + urlMatch[1];
+      var searchIdx = -1;
+      for (var pi = 0; pi < patterns.length; pi++) {
+        var idx = listHtml.indexOf(patterns[pi]);
+        if (idx !== -1) { searchIdx = idx; break; }
+      }
+      if (searchIdx !== -1) {
+        // Search before and after the stock reference for the vehicle URL
+        var before = listHtml.substring(Math.max(0, searchIdx - 4000), searchIdx + 2000);
+        var reUrl = new RegExp('href="(/occasion/[^"]+id[0-9]+\.html)"');
+        var urlMatch = before.match(reUrl);
+        if (urlMatch) ficheUrl = 'https://www.hyundaistraymond.com' + urlMatch[1];
+      }
+      if (ficheUrl) {
         try {
-          const ficheHtml = new TextDecoder('iso-8859-1').decode(await (await fetch(ficheUrl, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(10000) })).arrayBuffer());
-          const rePhoto = new RegExp('imagescdn\\.d2cmedia\\.ca/[^/]+/1918/[0-9]+/([0-9]+)/', 'g');
-          const indices = new Set(); let m;
+          var ficheHtml = new TextDecoder('iso-8859-1').decode(
+            await (await fetch(ficheUrl, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(10000) })).arrayBuffer()
+          );
+          var rePhoto = new RegExp('imagescdn\.d2cmedia\.ca/[^/]+/1918/[0-9]+/([0-9]+)/', 'g');
+          var indices = new Set(); var m;
           while ((m = rePhoto.exec(ficheHtml)) !== null) { indices.add(m[1]); }
-          photos = indices.size || new Set((ficheHtml.match(new RegExp('imagescdn\\.d2cmedia\\.ca/[^"\\s]+\\.jpg', 'gi')) || [])).size;
-        } catch(e) {}
+          photos = indices.size;
+          if (photos === 0) {
+            var allImgs = ficheHtml.match(new RegExp('imagescdn\.d2cmedia\.ca/[^"\s]+\.jpg', 'gi')) || [];
+            photos = new Set(allImgs).size;
+          }
+        } catch(e) { console.error('Photo count:', e.message); }
       }
     }
     return res.json({ enligne: enligne, photos: photos, ficheUrl: ficheUrl });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) {
+    console.error('check-web:', err.message);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.get('*', function(req, res) { res.sendFile(path.join(__dirname, 'index.html')); });
