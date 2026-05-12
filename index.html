@@ -736,7 +736,7 @@ async function createDriveFolder(vid){
 
 async function moveCarfax(vid){
   const v=vehicles.find(x=>x.id===vid);if(!v)return;
-  if(!v.docs.folderId){showNotif('<i class="ti ti-alert-triangle"></i> Créez d'abord le dossier Drive','warn');return;}
+  if(!v.docs.folderId){showNotif('<i class="ti ti-alert-triangle"></i> Creez le dossier Drive en premier','warn');return;}
   showNotif('<div class="spin"></div> Déplacement du Carfax…','info',0);
   try{
     const r=await fetch('/api/move-carfax',{method:'POST',headers:{'Content-Type':'application/json'},
@@ -753,7 +753,7 @@ async function moveCarfax(vid){
 
 async function uploadFile(vid, type){
   const v=vehicles.find(x=>x.id===vid);if(!v)return;
-  if(!v.docs.folderId){showNotif('<i class="ti ti-alert-triangle"></i> Créez d'abord le dossier Drive','warn');return;}
+  if(!v.docs.folderId){showNotif('<i class="ti ti-alert-triangle"></i> Créez le dossier Drive en premier','warn');return;}
   const input=document.createElement('input');
   input.type='file';input.accept='.pdf,application/pdf';
   input.onchange=async function(){
