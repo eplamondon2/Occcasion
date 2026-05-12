@@ -138,27 +138,34 @@ app.post('/api/comments', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// SEND EMAIL via Resend
+// SEND EMAIL via Brevo SMTP
+const nodemailer = require('nodemailer');
+const transporter = nodemailer.createTransport({
+  host: 'smtp-relay.brevo.com',
+  port: 587,
+  secure: false,
+  auth: {
+    user: process.env.BREVO_SMTP_USER || 'ab1134001@smtp-brevo.com',
+    pass: process.env.BREVO_SMTP_PASS
+  }
+});
+
 app.post('/api/notify', async (req, res) => {
-  const { to, toName, from, subject, html } = req.body;
-  const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey) return res.status(500).json({ error: 'RESEND_API_KEY non configurée' });
+  const { to, subject, html } = req.body;
   if (!to) return res.status(400).json({ error: 'Destinataire requis' });
+  if (!process.env.BREVO_SMTP_PASS) return res.status(500).json({ error: 'BREVO_SMTP_PASS non configuré' });
   try {
-    const r = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: { Authorization: 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        from: 'Hyundai St-Raymond VO <onboarding@resend.dev>',
-        to: [to],
-        subject: subject || 'Notification — Mise en marché VO',
-        html: html
-      })
+    const info = await transporter.sendMail({
+      from: '"Hyundai St-Raymond VO" <hyundaistraymondusages@gmail.com>',
+      to: to,
+      subject: subject || 'Notification — Mise en marché VO',
+      html: html
     });
-    const data = await r.json();
-    if (data.id) { res.json({ sent: true, id: data.id }); }
-    else { res.status(502).json({ error: 'Erreur Resend', detail: data }); }
-  } catch (err) { res.status(500).json({ error: err.message }); }
+    res.json({ sent: true, id: info.messageId });
+  } catch (err) {
+    console.error('Email error:', err.message);
+    res.status(502).json({ error: err.message });
+  }
 });
 
 // GOOGLE DRIVE
