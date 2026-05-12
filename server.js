@@ -138,35 +138,36 @@ app.post('/api/comments', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// SEND EMAIL via Office 365 SMTP
-const nodemailer = require('nodemailer');
-const o365Transporter = nodemailer.createTransport({
-  host: 'smtp.office365.com',
-  port: 587,
-  secure: false,
-  auth: {
-    user: process.env.O365_EMAIL,
-    pass: process.env.O365_PASSWORD
-  },
-  tls: { ciphers: 'SSLv3' }
-});
-
+// SEND EMAIL via Brevo API (HTTP)
 app.post('/api/notify', async (req, res) => {
   const { to, subject, html } = req.body;
   if (!to) return res.status(400).json({ error: 'Destinataire requis' });
-  if (!process.env.O365_EMAIL || !process.env.O365_PASSWORD) {
-    return res.status(500).json({ error: 'O365_EMAIL ou O365_PASSWORD non configuré' });
-  }
+  const apiKey = process.env.BREVO_API_KEY;
+  if (!apiKey) return res.status(500).json({ error: 'BREVO_API_KEY non configuré' });
   try {
-    const info = await o365Transporter.sendMail({
-      from: '"Hyundai St-Raymond VO" <' + process.env.O365_EMAIL + '>',
-      to: to,
-      subject: subject || 'Notification — Mise en marché VO',
-      html: html
+    const r = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        'accept': 'application/json',
+        'api-key': apiKey,
+        'content-type': 'application/json'
+      },
+      body: JSON.stringify({
+        sender: { name: 'Hyundai St-Raymond VO', email: 'hyundaistraymondusages@gmail.com' },
+        to: [{ email: to }],
+        subject: subject || 'Notification — Mise en marché VO',
+        htmlContent: html
+      })
     });
-    res.json({ sent: true, id: info.messageId });
+    const data = await r.json();
+    if (data.messageId) {
+      res.json({ sent: true, id: data.messageId });
+    } else {
+      console.error('Brevo error:', JSON.stringify(data));
+      res.status(502).json({ error: 'Erreur Brevo', detail: data });
+    }
   } catch (err) {
-    console.error('O365 email error:', err.message);
+    console.error('Email error:', err.message);
     res.status(502).json({ error: err.message });
   }
 });
