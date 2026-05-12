@@ -138,30 +138,34 @@ app.post('/api/comments', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// SEND EMAIL via Brevo SMTP
-const nodemailer = require('nodemailer');
-const transporter = nodemailer.createTransport({
-  host: 'smtp-relay.brevo.com',
-  port: 587,
-  secure: false,
-  auth: {
-    user: process.env.BREVO_SMTP_USER || 'ab1134001@smtp-brevo.com',
-    pass: process.env.BREVO_SMTP_PASS
-  }
-});
-
+// SEND EMAIL via Brevo API (HTTP)
 app.post('/api/notify', async (req, res) => {
   const { to, subject, html } = req.body;
   if (!to) return res.status(400).json({ error: 'Destinataire requis' });
-  if (!process.env.BREVO_SMTP_PASS) return res.status(500).json({ error: 'BREVO_SMTP_PASS non configuré' });
+  const apiKey = process.env.BREVO_API_KEY;
+  if (!apiKey) return res.status(500).json({ error: 'BREVO_API_KEY non configuré' });
   try {
-    const info = await transporter.sendMail({
-      from: '"Hyundai St-Raymond VO" <hyundaistraymondusages@gmail.com>',
-      to: to,
-      subject: subject || 'Notification — Mise en marché VO',
-      html: html
+    const r = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        'accept': 'application/json',
+        'api-key': apiKey,
+        'content-type': 'application/json'
+      },
+      body: JSON.stringify({
+        sender: { name: 'Hyundai St-Raymond VO', email: 'hyundaistraymondusages@gmail.com' },
+        to: [{ email: to }],
+        subject: subject || 'Notification — Mise en marché VO',
+        htmlContent: html
+      })
     });
-    res.json({ sent: true, id: info.messageId });
+    const data = await r.json();
+    if (data.messageId) {
+      res.json({ sent: true, id: data.messageId });
+    } else {
+      console.error('Brevo error:', JSON.stringify(data));
+      res.status(502).json({ error: 'Erreur Brevo', detail: data });
+    }
   } catch (err) {
     console.error('Email error:', err.message);
     res.status(502).json({ error: err.message });
