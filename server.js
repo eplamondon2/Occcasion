@@ -318,7 +318,7 @@ app.post('/api/check-web', async (req, res) => {
     }
 
     const d2cId = vehicle['D2C Vehicle ID'];
-    const ficheUrl = vehicle['Vehicle Details Page (VDP)'] || null;
+    const ficheUrl = (vehicle['Vehicle Details Page (VDP)'] || '').replace('/used/','/occasion/') || null;
     const enligne = true;
 
     // Count photos by trying CDN URLs
@@ -330,14 +330,18 @@ app.post('/api/check-web', async (req, res) => {
       const token = tokenMatch ? tokenMatch[1] : null;
 
       if (token) {
-        // Count photos by checking URLs 1.jpg, 2.jpg... until 404
+        // Count photos by checking URLs sequentially
         let i = 1;
         let found = true;
-        while (found && i <= 50) {
+        while (found && i <= 60) {
           try {
-            const photoUrl = 'https://imagescdn.d2cmedia.ca/' + token + '/1918/' + d2cId + '/' + i + '/photo.jpg';
-            const r = await fetch(photoUrl, { method: 'HEAD', signal: AbortSignal.timeout(3000) });
-            if (r.ok || r.status === 200) {
+            // D2C format: /token/1918/vehicleId/photoIndex/Make-Model-Year.jpg
+            const makes = (vehicle.make||'').replace(/ /g,'_');
+            const models = (vehicle.model||'').replace(/ /g,'_');
+            const yr = vehicle.year||'';
+            const photoUrl = 'https://imagescdn.d2cmedia.ca/' + token + '/1918/' + d2cId + '/' + i + '/' + makes + '-' + models + '-' + yr + '.jpg';
+            const r = await fetch(photoUrl, { method: 'HEAD', signal: AbortSignal.timeout(4000) });
+            if (r.status === 200) {
               photos = i;
               i++;
             } else {
