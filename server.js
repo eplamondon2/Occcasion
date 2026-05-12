@@ -61,6 +61,22 @@ async function initDB() {
 }
 initDB();
 
+// TEST INVENTORY FETCH
+app.get('/api/test-inventory', async (req, res) => {
+  try {
+    const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36';
+    const r = await fetch('https://www.hyundaistraymond.com/js/json/chatboost/inventory/inventory-index.json', {
+      headers: { 'User-Agent': UA, 'Accept': 'application/json' },
+      signal: AbortSignal.timeout(20000)
+    });
+    const text = await r.text();
+    const data = JSON.parse(text);
+    res.json({ ok: true, count: data.length, sample: data[0] && data[0]['stock number'] });
+  } catch(err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 // HEALTH CHECK
 app.get('/api/health', async (req, res) => {
   try {
@@ -68,6 +84,39 @@ app.get('/api/health', async (req, res) => {
     res.json({ ok: true, time: r.rows[0].time, db: r.rows[0].db });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// INVENTORY CACHE & PROXY
+let inventoryCache = null;
+let inventoryCacheTime = 0;
+const CACHE_TTL = 30 * 60 * 1000; // 30 minutes
+
+async function getInventory() {
+  const now = Date.now();
+  if (inventoryCache && (now - inventoryCacheTime) < CACHE_TTL) {
+    return inventoryCache;
+  }
+  const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36';
+  const r = await fetch('https://www.hyundaistraymond.com/js/json/chatboost/inventory/inventory-index.json', {
+    headers: { 'User-Agent': UA, 'Accept': 'application/json', 'Referer': 'https://www.hyundaistraymond.com/' },
+    signal: AbortSignal.timeout(20000)
+  });
+  const text = await r.text();
+  inventoryCache = JSON.parse(text);
+  inventoryCacheTime = now;
+  console.log('Inventory cached:', inventoryCache.length, 'vehicles');
+  return inventoryCache;
+}
+
+// Proxy inventory to client (bypasses CORS)
+app.get('/api/inventory', async (req, res) => {
+  try {
+    const data = await getInventory();
+    res.json(data);
+  } catch(err) {
+    console.error('Inventory proxy error:', err.message);
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -298,57 +347,34 @@ app.post('/api/check-web', async (req, res) => {
   const { stock } = req.body;
   if (!stock) return res.status(400).json({ error: 'stock requis' });
   try {
-    const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36';
-
-    // Fetch D2C inventory JSON
-    const invRes = await fetch('https://www.hyundaistraymond.com/js/json/chatboost/inventory/inventory-index.json', {
-      headers: { 'User-Agent': UA, 'Accept': 'application/json' },
-      signal: AbortSignal.timeout(15000)
-    });
-    
-    if (!invRes.ok) {
-      return res.status(502).json({ error: 'Inventory fetch failed: ' + invRes.status });
-    }
-    
-    const text = await invRes.text();
-    const inventory = JSON.parse(text);
-    
+    const inventory = await getInventory();
     const vehicle = inventory.find(function(v) {
       return (v['stock number'] || '').toUpperCase() === stock.toUpperCase();
     });
-    
-    if (!vehicle) {
-      return res.json({ enligne: false, photos: 0, ficheUrl: null, debug: 'not in inventory, total: ' + inventory.length });
-    }
+    if (!vehicle) return res.json({ enligne: false, photos: 0, ficheUrl: null });
 
     const d2cId = vehicle['D2C Vehicle ID'];
     const ficheUrl = (vehicle['Vehicle Details Page (VDP)'] || '').replace('/used/', '/occasion/') || null;
     const mainPic = vehicle['main picture'] || '';
 
-    // Count photos using D2C CDN pattern - no need to fetch fiche page
     let photos = 0;
     if (mainPic && d2cId) {
-      // Extract token from main picture URL
       const tokenMatch = mainPic.match(new RegExp('imagescdn\.d2cmedia\.ca\/([^\/]+)\/'));
       const token = tokenMatch ? tokenMatch[1] : null;
-      
       if (token) {
-        // Try photos sequentially but with short timeout and max 30
+        const make = (vehicle.make || '').replace(/ /g,'_');
+        const model = (vehicle.model || '').replace(/ /g,'_');
+        const year = vehicle.year || '';
         let i = 1, found = true;
-        while (found && i <= 30) {
+        while (found && i <= 50) {
           try {
-            const make = (vehicle.make || '').replace(/ /g,'_');
-            const model = (vehicle.model || '').replace(/ /g,'_');
-            const year = vehicle.year || '';
-            const photoUrl = 'https://imagescdn.d2cmedia.ca/' + token + '/1918/' + d2cId + '/' + i + '/' + make + '-' + model + '-' + year + '.jpg';
-            const r = await fetch(photoUrl, { method: 'HEAD', signal: AbortSignal.timeout(2000) });
-            if (r.status === 200) { photos = i; i++; }
-            else { found = false; }
+            const url = 'https://imagescdn.d2cmedia.ca/' + token + '/1918/' + d2cId + '/' + i + '/' + make + '-' + model + '-' + year + '.jpg';
+            const r = await fetch(url, { method: 'HEAD', signal: AbortSignal.timeout(3000) });
+            if (r.status === 200) { photos = i; i++; } else { found = false; }
           } catch(e) { found = false; }
         }
       }
-      // If no token or count failed but has main pic, at least 1
-      if (photos === 0 && mainPic) photos = 1;
+      if (photos === 0) photos = 1;
     }
 
     return res.json({ enligne: true, photos: photos, ficheUrl: ficheUrl, d2cId: d2cId });
