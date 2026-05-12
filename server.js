@@ -302,55 +302,56 @@ app.post('/api/check-web', async (req, res) => {
 
     // Fetch D2C inventory JSON
     const invRes = await fetch('https://www.hyundaistraymond.com/js/json/chatboost/inventory/inventory-index.json', {
-      headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(15000)
+      headers: { 'User-Agent': UA, 'Accept': 'application/json' },
+      signal: AbortSignal.timeout(15000)
     });
-    const inventory = await invRes.json();
-
-    // Find vehicle by stock number
+    
+    if (!invRes.ok) {
+      return res.status(502).json({ error: 'Inventory fetch failed: ' + invRes.status });
+    }
+    
+    const text = await invRes.text();
+    const inventory = JSON.parse(text);
+    
     const vehicle = inventory.find(function(v) {
       return (v['stock number'] || '').toUpperCase() === stock.toUpperCase();
     });
-
-    if (!vehicle) return res.json({ enligne: false, photos: 0, ficheUrl: null });
+    
+    if (!vehicle) {
+      return res.json({ enligne: false, photos: 0, ficheUrl: null, debug: 'not in inventory, total: ' + inventory.length });
+    }
 
     const d2cId = vehicle['D2C Vehicle ID'];
     const ficheUrl = (vehicle['Vehicle Details Page (VDP)'] || '').replace('/used/', '/occasion/') || null;
     const mainPic = vehicle['main picture'] || '';
 
-    // Extract token from main picture URL
-    const tokenMatch = mainPic.match(new RegExp('imagescdn\.d2cmedia\.ca\/([^\/]+)\/'));
-    const token = tokenMatch ? tokenMatch[1] : null;
-
+    // Count photos using D2C CDN pattern - no need to fetch fiche page
     let photos = 0;
-
-    if (token && d2cId && mainPic) {
-      // Fetch the vehicle fiche page and count images from CDN
-      try {
-        const ficheRes = await fetch(ficheUrl, {
-          headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(10000)
-        });
-        const ficheHtml = new TextDecoder('iso-8859-1').decode(await ficheRes.arrayBuffer());
-
-        // Count unique photo indices in CDN URLs for this vehicle
-        const rePhoto = new RegExp(d2cId + '\/([0-9]+)\/', 'g');
-        const indices = new Set();
-        let m;
-        while ((m = rePhoto.exec(ficheHtml)) !== null) {
-          const idx = parseInt(m[1]);
-          if (idx > 0) indices.add(idx);
+    if (mainPic && d2cId) {
+      // Extract token from main picture URL
+      const tokenMatch = mainPic.match(new RegExp('imagescdn\.d2cmedia\.ca\/([^\/]+)\/'));
+      const token = tokenMatch ? tokenMatch[1] : null;
+      
+      if (token) {
+        // Try photos sequentially but with short timeout and max 30
+        let i = 1, found = true;
+        while (found && i <= 30) {
+          try {
+            const make = (vehicle.make || '').replace(/ /g,'_');
+            const model = (vehicle.model || '').replace(/ /g,'_');
+            const year = vehicle.year || '';
+            const photoUrl = 'https://imagescdn.d2cmedia.ca/' + token + '/1918/' + d2cId + '/' + i + '/' + make + '-' + model + '-' + year + '.jpg';
+            const r = await fetch(photoUrl, { method: 'HEAD', signal: AbortSignal.timeout(2000) });
+            if (r.status === 200) { photos = i; i++; }
+            else { found = false; }
+          } catch(e) { found = false; }
         }
-        photos = indices.size;
-      } catch(e) {
-        // Fallback: if main picture exists, at least 1 photo
-        if (mainPic) photos = 1;
-        console.error('Fiche fetch error:', e.message);
       }
-    } else if (mainPic) {
-      // Has main picture but no token — at least 1 photo
-      photos = 1;
+      // If no token or count failed but has main pic, at least 1
+      if (photos === 0 && mainPic) photos = 1;
     }
 
-    return res.json({ enligne: true, photos: photos, ficheUrl: ficheUrl, d2cId: d2cId, hasMainPic: !!mainPic });
+    return res.json({ enligne: true, photos: photos, ficheUrl: ficheUrl, d2cId: d2cId });
   } catch (err) {
     console.error('check-web:', err.message);
     res.status(500).json({ error: err.message });
