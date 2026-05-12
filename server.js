@@ -300,45 +300,57 @@ app.post('/api/check-web', async (req, res) => {
   try {
     const stockUp = stock.toUpperCase();
     const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36';
-    const listHtml = new TextDecoder('iso-8859-1').decode(
-      await (await fetch('https://www.hyundaistraymond.com/occasion/recherche.html', {
-        headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(12000)
-      })).arrayBuffer()
-    );
-    // D2C formats: "Stock:7572AA", "(Stock:7572AA)", "(7572AA)", "7572AA"
-    const patterns = ['Stock:'+stockUp, 'Stock: '+stockUp, '('+stockUp+')', stockUp, stock];
-    const enligne = patterns.some(function(p) { return listHtml.includes(p); });
-    let photos = 0, ficheUrl = null;
-    if (enligne) {
-      var searchIdx = -1;
-      for (var pi = 0; pi < patterns.length; pi++) {
-        var idx = listHtml.indexOf(patterns[pi]);
-        if (idx !== -1) { searchIdx = idx; break; }
-      }
-      if (searchIdx !== -1) {
-        // Search before and after the stock reference for the vehicle URL
-        var before = listHtml.substring(Math.max(0, searchIdx - 4000), searchIdx + 2000);
-        var reUrl = new RegExp('href="(/occasion/[^"]+id[0-9]+\.html)"');
-        var urlMatch = before.match(reUrl);
-        if (urlMatch) ficheUrl = 'https://www.hyundaistraymond.com' + urlMatch[1];
-      }
-      if (ficheUrl) {
-        try {
-          var ficheHtml = new TextDecoder('iso-8859-1').decode(
-            await (await fetch(ficheUrl, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(10000) })).arrayBuffer()
-          );
-          var rePhoto = new RegExp('imagescdn\.d2cmedia\.ca/[^/]+/1918/[0-9]+/([0-9]+)/', 'g');
-          var indices = new Set(); var m;
-          while ((m = rePhoto.exec(ficheHtml)) !== null) { indices.add(m[1]); }
-          photos = indices.size;
-          if (photos === 0) {
-            var allImgs = ficheHtml.match(new RegExp('imagescdn\.d2cmedia\.ca/[^"\s]+\.jpg', 'gi')) || [];
-            photos = new Set(allImgs).size;
+
+    // Fetch D2C inventory JSON
+    const invRes = await fetch('https://www.hyundaistraymond.com/js/json/chatboost/inventory/inventory-index.json', {
+      headers: { 'User-Agent': UA },
+      signal: AbortSignal.timeout(12000)
+    });
+    const inventory = await invRes.json();
+
+    // Find vehicle by stock number
+    const vehicle = inventory.find(function(v) {
+      return (v['stock number'] || '').toUpperCase() === stockUp;
+    });
+
+    if (!vehicle) {
+      return res.json({ enligne: false, photos: 0, ficheUrl: null });
+    }
+
+    const d2cId = vehicle['D2C Vehicle ID'];
+    const ficheUrl = vehicle['Vehicle Details Page (VDP)'] || null;
+    const enligne = true;
+
+    // Count photos by trying CDN URLs
+    let photos = 0;
+    if (d2cId) {
+      // Get CDN token from main picture URL
+      const mainPic = vehicle['main picture'] || '';
+      const tokenMatch = mainPic.match(new RegExp('imagescdn\.d2cmedia\.ca\/([^\/]+)\/1918\/'));
+      const token = tokenMatch ? tokenMatch[1] : null;
+
+      if (token) {
+        // Count photos by checking URLs 1.jpg, 2.jpg... until 404
+        let i = 1;
+        let found = true;
+        while (found && i <= 50) {
+          try {
+            const photoUrl = 'https://imagescdn.d2cmedia.ca/' + token + '/1918/' + d2cId + '/' + i + '/photo.jpg';
+            const r = await fetch(photoUrl, { method: 'HEAD', signal: AbortSignal.timeout(3000) });
+            if (r.ok || r.status === 200) {
+              photos = i;
+              i++;
+            } else {
+              found = false;
+            }
+          } catch(e) {
+            found = false;
           }
-        } catch(e) { console.error('Photo count:', e.message); }
+        }
       }
     }
-    return res.json({ enligne: enligne, photos: photos, ficheUrl: ficheUrl });
+
+    return res.json({ enligne: enligne, photos: photos, ficheUrl: ficheUrl, d2cId: d2cId });
   } catch (err) {
     console.error('check-web:', err.message);
     res.status(500).json({ error: err.message });
