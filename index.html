@@ -413,7 +413,7 @@ function saveVehicles(){
         km:v.km,price:v.price,color:v.color||'',resp:v.resp,
         createdAt:v.createdAt,opts:v.opts,sd:v.sd,expanded:v.expanded,
         docs:{carfax:v.docs.carfax,inspection:v.docs.inspection,
-              estimation:v.docs.estimation,driveFolder:v.docs.driveFolder||null,
+              estimation:v.docs.estimation,driveFolder:v.docs.driveFolder||null,folderId:v.docs.folderId||null,
               enligne:v.docs.enligne,photos:v.docs.photos,ficheUrl:v.docs.ficheUrl||null}
       }));
       localStorage.setItem(STORAGE_KEY, JSON.stringify({vehicles:toSave,nid,savedAt:new Date().toISOString()}));
@@ -434,7 +434,7 @@ function loadVehicles(){
         return{...s,steps,color:s.color||'',
           daysAgo:calcDaysAgo(s.createdAt),
           docs:{carfax:s.docs?.carfax??null,inspection:s.docs?.inspection??null,
-                estimation:s.docs?.estimation??null,driveFolder:s.docs?.driveFolder||null,scanning:false,
+                estimation:s.docs?.estimation??null,driveFolder:s.docs?.driveFolder||null,folderId:s.docs?.folderId||null,scanning:false,
                 enligne:s.docs?.enligne??null,photos:s.docs?.photos??null,ficheUrl:s.docs?.ficheUrl||null,scanningWeb:false}};
       });
       setSaveInd('ok', vehicles.length+' dossier'+(vehicles.length>1?'s':'')+' chargé'+(vehicles.length>1?'s':''));
@@ -587,6 +587,10 @@ function renderCard(v){
         <div class="card-footer-left">
           <a href="https://www.hyundaistraymond.com/occasion/recherche.html" target="_blank" class="btn-sm"><i class="ti ti-external-link" style="font-size:11px"></i> Site web</a>
           ${driveHref}
+          ${canEdit?`<button class="btn-sm" style="border-color:#4285f4;color:#1a56db" onclick="createDriveFolder(${v.id})" title="Créer dossier Drive"><i class="ti ti-folder-plus" style="font-size:11px"></i> Créer dossier</button>`:''}
+          ${canEdit&&!d.carfax?`<button class="btn-sm" style="border-color:#f59e0b;color:#92400e" onclick="moveCarfax(${v.id})" title="Déplacer Carfax"><i class="ti ti-file-arrow-right" style="font-size:11px"></i> Déplacer Carfax</button>`:''}
+          ${(canEdit||currentUser==='Vincent Bouchard')?`<button class="btn-sm" style="border-color:#10b981;color:#065f46" onclick="uploadFile(${v.id},'inspection')" title="Uploader rapport inspection"><i class="ti ti-upload" style="font-size:11px"></i> Inspection</button>`:''}
+          ${(canEdit||currentUser==='Vincent Bouchard')?`<button class="btn-sm" style="border-color:#6366f1;color:#3730a3" onclick="uploadFile(${v.id},'estimation')" title="Uploader estimation réparations"><i class="ti ti-upload" style="font-size:11px"></i> Estimation</button>`:''}
         </div>
         <span style="font-size:10px;color:var(--text-hint)">Créé le ${dateStr} · J+${v.daysAgo}</span>
       </div>
@@ -620,6 +624,7 @@ function renderStep(v,s,i,canEdit){
       <div class="step-dl ${dlC}">${dlTxt}</div>
     </div>
     <div class="step-actions">
+      ${v.sd[i].done&&(isDir||isMyOwnStep)?`<button class="btn-sm" style="border-color:#fca5a5;color:#991b1b" onclick="uncompleteStep(${v.id},${i})" title="Annuler"><i class="ti ti-arrow-back" style="font-size:11px"></i></button>`:''}
       ${canAct?`<button class="btn-sm success" onclick="completeStep(${v.id},${i})"><i class="ti ti-check" style="font-size:11px"></i> Marquer fait</button>`:''}
       ${canAct?`<button class="btn-sm" onclick="sendNotif(${v.id},${i})" title="Envoyer rappel"><i class="ti ti-bell" style="font-size:11px"></i></button>`:''}
     </div>
@@ -644,6 +649,14 @@ function deleteV(id){
   vehicles=vehicles.filter(x=>x.id!==id);
   saveVehicles();renderAll();
   showNotif('<i class="ti ti-trash"></i> Dossier #'+v.stock+' supprimé','warn');
+}
+
+function uncompleteStep(vid,idx){
+  const v=vehicles.find(x=>x.id===vid);if(!v)return;
+  if(!confirm('Annuler cette étape ?'))return;
+  v.sd[idx].done=false;v.sd[idx].doneDay=null;
+  saveVehicles();renderAll();
+  showNotif('<i class="ti ti-arrow-back"></i> Étape annulée','warn');
 }
 
 function completeStep(vid,idx){
@@ -703,6 +716,68 @@ async function checkWeb(vid){
   }catch(e){v.docs.enligne=false;v.docs.photos=0;}
   v.docs.scanningWeb=false;
   saveVehicles();renderAll();
+}
+
+async function createDriveFolder(vid){
+  const v=vehicles.find(x=>x.id===vid);if(!v)return;
+  showNotif('<div class="spin"></div> Création du dossier Drive…','info',0);
+  try{
+    const r=await fetch('/api/create-folder',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({stock:v.stock,year:v.year,make:v.make,model:v.model,parentId:DRIVE_PARENT_ID})});
+    const d=await r.json();
+    if(d.folderId){
+      v.docs.driveFolder=d.folderUrl;
+      v.docs.folderId=d.folderId;
+      saveVehicles();renderAll();
+      showNotif('<i class="ti ti-folder-check"></i> Dossier '+(d.existed?'déjà existant':'créé')+' : <strong>'+d.folderName+'</strong>','ok');
+    }
+  }catch(e){showNotif('<i class="ti ti-alert-triangle"></i> Erreur: '+e.message,'warn');}
+}
+
+async function moveCarfax(vid){
+  const v=vehicles.find(x=>x.id===vid);if(!v)return;
+  if(!v.docs.folderId){showNotif('<i class="ti ti-alert-triangle"></i> Créez d'abord le dossier Drive','warn');return;}
+  showNotif('<div class="spin"></div> Déplacement du Carfax…','info',0);
+  try{
+    const r=await fetch('/api/move-carfax',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({stock:v.stock,parentId:DRIVE_PARENT_ID,folderId:v.docs.folderId})});
+    const d=await r.json();
+    if(d.moved){
+      v.docs.carfax=true;saveVehicles();renderAll();
+      showNotif('<i class="ti ti-check"></i> Carfax déplacé : <strong>'+d.fileName+'</strong>','ok');
+    } else {
+      showNotif('<i class="ti ti-alert-triangle"></i> '+d.message,'warn');
+    }
+  }catch(e){showNotif('<i class="ti ti-alert-triangle"></i> Erreur: '+e.message,'warn');}
+}
+
+async function uploadFile(vid, type){
+  const v=vehicles.find(x=>x.id===vid);if(!v)return;
+  if(!v.docs.folderId){showNotif('<i class="ti ti-alert-triangle"></i> Créez d'abord le dossier Drive','warn');return;}
+  const input=document.createElement('input');
+  input.type='file';input.accept='.pdf,application/pdf';
+  input.onchange=async function(){
+    const file=input.files[0];if(!file)return;
+    const fileName = type==='inspection'?v.stock+'.pdf':v.stock+'-I.pdf';
+    showNotif('<div class="spin"></div> Upload de <strong>'+fileName+'</strong>…','info',0);
+    const reader=new FileReader();
+    reader.onload=async function(){
+      const base64=reader.result.split(',')[1];
+      try{
+        const r=await fetch('/api/upload-file',{method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({folderId:v.docs.folderId,fileName:fileName,fileData:base64,mimeType:'application/pdf'})});
+        const d=await r.json();
+        if(d.uploaded){
+          if(type==='inspection')v.docs.inspection=true;
+          else v.docs.estimation=true;
+          saveVehicles();renderAll();
+          showNotif('<i class="ti ti-upload"></i> <strong>'+fileName+'</strong> uploadé dans Drive','ok');
+        }
+      }catch(e){showNotif('<i class="ti ti-alert-triangle"></i> Erreur upload: '+e.message,'warn');}
+    };
+    reader.readAsDataURL(file);
+  };
+  input.click();
 }
 
 async function scanAll(){
@@ -765,14 +840,17 @@ function addVehicle(){
     photos:document.getElementById('f-photos').checked
   };
   const steps=makeSteps(opts);
-  vehicles.unshift({
+  const newV={
     id:nid++,stock,year,make,model,km,price,color,resp,
     createdAt:Date.now(),daysAgo:0,opts,steps,
     sd:steps.map(()=>({done:false,doneDay:null})),
-    docs:{carfax:null,inspection:null,estimation:null,driveFolder:null,scanning:false,enligne:null,photos:null,ficheUrl:null,scanningWeb:false},
+    docs:{carfax:null,inspection:null,estimation:null,driveFolder:null,folderId:null,scanning:false,enligne:null,photos:null,ficheUrl:null,scanningWeb:false},
     expanded:true
-  });
+  };
+  vehicles.unshift(newV);
   closeModal();
+  // Auto-create Drive folder
+  setTimeout(()=>createDriveFolder(newV.id),500);
   ['f-stk','f-yr','f-mk','f-mo','f-km','f-pr','f-col'].forEach(id=>{document.getElementById(id).value='';});
   saveVehicles();renderAll();
   showNotif('<i class="ti ti-check"></i> Dossier créé — <strong>'+year+' '+make+' '+model+'</strong> (#'+stock+')','ok');
