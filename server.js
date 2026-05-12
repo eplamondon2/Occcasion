@@ -299,39 +299,58 @@ app.post('/api/check-web', async (req, res) => {
   if (!stock) return res.status(400).json({ error: 'stock requis' });
   try {
     const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36';
+
+    // Fetch D2C inventory JSON
     const invRes = await fetch('https://www.hyundaistraymond.com/js/json/chatboost/inventory/inventory-index.json', {
       headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(15000)
     });
     const inventory = await invRes.json();
+
+    // Find vehicle by stock number
     const vehicle = inventory.find(function(v) {
       return (v['stock number'] || '').toUpperCase() === stock.toUpperCase();
     });
+
     if (!vehicle) return res.json({ enligne: false, photos: 0, ficheUrl: null });
 
     const d2cId = vehicle['D2C Vehicle ID'];
     const ficheUrl = (vehicle['Vehicle Details Page (VDP)'] || '').replace('/used/', '/occasion/') || null;
-    let photos = 0;
-
-    // Get token from main picture
     const mainPic = vehicle['main picture'] || '';
-    const tokenMatch = mainPic.match(new RegExp('imagescdn\.d2cmedia\.ca\/([^\/]+)\/1918\/'));
+
+    // Extract token from main picture URL
+    const tokenMatch = mainPic.match(new RegExp('imagescdn\.d2cmedia\.ca\/([^\/]+)\/'));
     const token = tokenMatch ? tokenMatch[1] : null;
 
-    if (token && d2cId) {
-      const make = (vehicle.make || '').replace(/ /g,'_');
-      const model = (vehicle.model || '').replace(/ /g,'_');
-      const year = vehicle.year || '';
-      let i = 1, found = true;
-      while (found && i <= 60) {
-        try {
-          const url = 'https://imagescdn.d2cmedia.ca/' + token + '/1918/' + d2cId + '/' + i + '/' + make + '-' + model + '-' + year + '.jpg';
-          const r = await fetch(url, { method: 'HEAD', signal: AbortSignal.timeout(4000) });
-          if (r.status === 200) { photos = i; i++; } else { found = false; }
-        } catch(e) { found = false; }
+    let photos = 0;
+
+    if (token && d2cId && mainPic) {
+      // Fetch the vehicle fiche page and count images from CDN
+      try {
+        const ficheRes = await fetch(ficheUrl, {
+          headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(10000)
+        });
+        const ficheHtml = new TextDecoder('iso-8859-1').decode(await ficheRes.arrayBuffer());
+
+        // Count unique photo indices in CDN URLs for this vehicle
+        const rePhoto = new RegExp(d2cId + '\/([0-9]+)\/', 'g');
+        const indices = new Set();
+        let m;
+        while ((m = rePhoto.exec(ficheHtml)) !== null) {
+          const idx = parseInt(m[1]);
+          if (idx > 0) indices.add(idx);
+        }
+        photos = indices.size;
+      } catch(e) {
+        // Fallback: if main picture exists, at least 1 photo
+        if (mainPic) photos = 1;
+        console.error('Fiche fetch error:', e.message);
       }
+    } else if (mainPic) {
+      // Has main picture but no token — at least 1 photo
+      photos = 1;
     }
 
-    return res.json({ enligne: true, photos: photos, ficheUrl: ficheUrl, d2cId: d2cId, token: token });
+    return res.json({ enligne: true, photos: photos, ficheUrl: ficheUrl, d2cId: d2cId, hasMainPic: !!mainPic });
   } catch (err) {
     console.error('check-web:', err.message);
     res.status(500).json({ error: err.message });
