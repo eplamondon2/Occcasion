@@ -256,6 +256,7 @@ header{background:var(--blue);color:white;padding:0 20px;height:56px;display:fle
       <div class="stat"><div class="stat-label">Complétés</div><div class="stat-val green" id="s-done">–</div></div>
       <div class="stat"><div class="stat-label">En retard</div><div class="stat-val red" id="s-late">–</div></div>
       <div class="stat"><div class="stat-label">Docs manquants</div><div class="stat-val amber" id="s-docs">–</div></div>
+      <div class="stat"><div class="stat-label">&lt; 10 photos</div><div class="stat-val amber" id="s-photos">–</div></div>
     </div>
 
     <div id="my-tasks-banner" style="display:none;background:var(--blue);color:white;border-radius:var(--radius);padding:14px 18px;margin-bottom:14px;align-items:center;justify-content:space-between;gap:12px">
@@ -278,6 +279,7 @@ header{background:var(--blue);color:white;padding:0 20px;height:56px;display:fle
         <button class="filter-btn" onclick="setFilter('late',this)">En retard</button>
         <button class="filter-btn" onclick="setFilter('done',this)">Complétés</button>
         <button class="filter-btn" onclick="setFilter('docs',this)">Docs manquants</button>
+        <button class="filter-btn" onclick="setFilter('photos',this)">&lt; 10 photos</button>
       </div>
       <div style="display:flex;gap:8px;align-items:center">
         <span class="save-ind" id="save-ind"><i class="ti ti-cloud" style="font-size:12px"></i> Chargement…</span>
@@ -307,6 +309,7 @@ header{background:var(--blue);color:white;padding:0 20px;height:56px;display:fle
       <div class="fg"><label>Prix demandé ($)</label><input type="number" id="f-pr" placeholder="29995"></div>
     </div>
     <div class="fg"><label>Couleur</label><input id="f-col" placeholder="ex: Blanc, Noir, Gris..."></div>
+        <div class="fg"><label>URL fiche D2C (optionnel)</label><input id="f-url" placeholder="ex: https://www.hyundaistraymond.com/occasion/..."></div>
     <div class="fg"><label>Responsable principal</label>
       <select id="f-resp">
         <option value="Serge Grenier">Serge Grenier — Directeur des ventes</option>
@@ -344,16 +347,16 @@ const TEAM = {
 
 const STEPS_DEF = [
   {id:'enligne',phase:'dir',name:'Mise en ligne site web D2C',assign:'Serge Grenier / Nicolas Rivard',delay:1,icon:'ti-world'},
-  {id:'prix',phase:'dir',name:'Validation prix — Vauto',assign:'Serge Grenier / Nicolas Rivard',delay:1,icon:'ti-chart-bar'},
-  {id:'req_insp',phase:'dir',name:'Requête inspection — Serti',assign:'Dir. → Vincent Bouchard',delay:1,icon:'ti-clipboard-list'},
-  {id:'req_carro',phase:'dir',name:'Requête carrosserie — Serti',assign:'Nicolas Rivard → Carrosserie',delay:1,icon:'ti-car-crash',optional:true,key:'carro'},
+
+  {id:'req_insp',phase:'dir',name:'Requête inspection',assign:'Dir. → Vincent Bouchard',delay:1,icon:'ti-clipboard-list'},
+  {id:'req_carro',phase:'dir',name:'Requête carrosserie',assign:'Nicolas Rivard → Carrosserie',delay:1,icon:'ti-car-crash',optional:true,key:'carro'},
   {id:'req_pb',phase:'dir',name:'Requête pare-brise — Serti',assign:'Dir. → Service',delay:1,icon:'ti-windmill',optional:true,key:'pb'},
-  {id:'insp',phase:'service',name:'Inspection mécanique complétée',assign:'Vincent Bouchard',delay:4,icon:'ti-tool'},
+  {id:'insp',phase:'service',name:'Inspection mécanique complétée',assign:'Vincent Bouchard',delay:3,icon:'ti-tool'},
   {id:'carro',phase:'service',name:'Carrosserie / débosselage complété',assign:'Nicolas Rivard → Carrosserie',delay:5,icon:'ti-car-crash',optional:true,key:'carro'},
   {id:'pb',phase:'service',name:'Pare-brise remplacé',assign:'Service',delay:4,icon:'ti-windmill',optional:true,key:'pb'},
-  {id:'esthet',phase:'service',name:'Esthétique & détailing',assign:'Martin Napier / Nicolas Fiset',delay:2,icon:'ti-sparkles',optional:true,key:'esthet'},
-  {id:'photos',phase:'photo',name:'Séance photo finale',assign:'Charles Boivin / Nicolas Rivard',delay:1,icon:'ti-camera',optional:true,key:'photos'},
-  {id:'complet',phase:'photo',name:'Dossier complet — prêt à la vente',assign:'Serge Grenier',delay:0,icon:'ti-circle-check'},
+  {id:'esthet',phase:'service',name:'Remise à neuf — Esthétique',assign:'Martin Napier / Nicolas Fiset',delay:5,icon:'ti-sparkles',key:'esthet'},
+  {id:'photos',phase:'photo',name:'Séance photo finale',assign:'Charles Boivin / Nicolas Rivard',delay:5,icon:'ti-camera',key:'photos'},
+  {id:'complet',phase:'photo',name:'Dossier complet — prêt à la vente',assign:'Serge Grenier',delay:6,icon:'ti-circle-check'},
 ];
 const PHASES = [
   {id:'dir',label:'Direction — mise en marché',icon:'ti-user'},
@@ -536,6 +539,7 @@ function renderAll(){
   else if(currentFilter==='active') list=vehicles.filter(v=>progress(v)<100&&!isLate(v));
   else if(currentFilter==='done') list=vehicles.filter(v=>progress(v)===100);
   else if(currentFilter==='docs') list=vehicles.filter(hasDocIssue);
+  else if(currentFilter==='photos') list=vehicles.filter(v=>v.docs.webScanned&&v.docs.photos!==null&&v.docs.photos<10);
   else if(currentFilter==='mine') list=getMyTasks();
   const el = document.getElementById('vlist');
   if(!vehicles.length){
@@ -761,12 +765,13 @@ async function checkWeb(vid){
   if(!v||v.docs.scanningWeb)return;
   v.docs.scanningWeb=true;renderAll();
   try{
-    const r=await fetch('/api/check-web',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({stock:v.stock})});
+    const r=await fetch('/api/check-web',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({stock:v.stock,ficheUrl:v.docs.ficheUrl||null})});
     if(!r.ok)throw new Error('Erreur '+r.status);
     const p=await r.json();
     v.docs.enligne=p.enligne;
     v.docs.photos=p.photos;
-    v.docs.ficheUrl=p.ficheUrl||null;
+    if(p.ficheUrl)v.docs.ficheUrl=p.ficheUrl;
   }catch(e){v.docs.enligne=false;v.docs.photos=0;}
   v.docs.scanningWeb=false;
   saveVehicles();renderAll();
@@ -934,6 +939,9 @@ function updateStats(){
   document.getElementById('s-late').textContent=vehicles.filter(isLate).length;
   const di=vehicles.filter(hasDocIssue).length;
   document.getElementById('s-docs').textContent=di||'–';
+  const pi=vehicles.filter(v=>v.docs.webScanned&&v.docs.photos!==null&&v.docs.photos<10).length;
+  const sel=document.getElementById('s-photos');
+  if(sel)sel.textContent=pi||'–';
 }
 
 function setFilter(f,el){
@@ -966,6 +974,7 @@ async function addVehicle(){
   const km=parseInt(document.getElementById('f-km').value)||0;
   const price=parseInt(document.getElementById('f-pr').value)||0;
   const color=document.getElementById('f-col').value.trim();
+  const manualUrl=(document.getElementById('f-url')?.value||'').trim()||null;
   const resp=document.getElementById('f-resp').value;
   const opts={
     carro:document.getElementById('f-carro').checked,
@@ -978,7 +987,7 @@ async function addVehicle(){
     id:nid++,stock,year,make,model,km,price,color,resp,
     createdAt:Date.now(),daysAgo:0,opts,steps,
     sd:steps.map(()=>({done:false,doneDay:null})),
-    docs:{carfax:null,inspection:null,estimation:null,driveFolder:null,folderId:null,scanning:false,enligne:null,photos:null,ficheUrl:null,scanningWeb:false},
+    docs:{carfax:null,inspection:null,estimation:null,driveFolder:null,folderId:null,scanning:false,enligne:null,photos:null,ficheUrl:manualUrl,scanningWeb:false},
     expanded:true
   };
   try{
@@ -988,7 +997,7 @@ async function addVehicle(){
   vehicles.unshift(newV);
   closeModal();
   setTimeout(()=>createDriveFolder(newV.id),500);
-  ['f-stk','f-yr','f-mk','f-mo','f-km','f-pr','f-col'].forEach(id=>{document.getElementById(id).value='';});
+  ['f-stk','f-yr','f-mk','f-mo','f-km','f-pr','f-col','f-url'].forEach(id=>{if(document.getElementById(id))document.getElementById(id).value='';});
   renderAll();
   showNotif('<i class="ti ti-check"></i> Dossier créé — <strong>'+year+' '+make+' '+model+'</strong> (#'+stock+')','ok');
 }
