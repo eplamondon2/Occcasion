@@ -403,45 +403,55 @@ function isLate(v){return progress(v)<100&&v.steps.some((_,i)=>stepStatus(v,i)==
 function hasDocIssue(v){return v.docs.carfax===false||v.docs.inspection===false;}
 function calcDaysAgo(createdAt){return Math.floor((Date.now()-createdAt)/(86400000));}
 
+async function saveVehicle(v){
+  try{
+    await fetch('/api/vehicles/'+v.stock,{
+      method:'PATCH',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({sd:v.sd,docs:{carfax:v.docs.carfax,inspection:v.docs.inspection,estimation:v.docs.estimation,driveFolder:v.docs.driveFolder||null,folderId:v.docs.folderId||null,enligne:v.docs.enligne,photos:v.docs.photos,ficheUrl:v.docs.ficheUrl||null},expanded:v.expanded,opts:v.opts})
+    });
+    setSaveInd('ok');
+  }catch(e){setSaveInd('error');}
+}
+
 function saveVehicles(){
   setSaveInd('saving');
   clearTimeout(saveTimeout);
-  saveTimeout = setTimeout(()=>{
+  saveTimeout=setTimeout(async ()=>{
     try{
-      const toSave = vehicles.map(v=>({
-        id:v.id,stock:v.stock,year:v.year,make:v.make,model:v.model,
-        km:v.km,price:v.price,color:v.color||'',resp:v.resp,
-        createdAt:v.createdAt,opts:v.opts,sd:v.sd,expanded:v.expanded,
-        docs:{carfax:v.docs.carfax,inspection:v.docs.inspection,
-              estimation:v.docs.estimation,driveFolder:v.docs.driveFolder||null,folderId:v.docs.folderId||null,
-              enligne:v.docs.enligne,photos:v.docs.photos,ficheUrl:v.docs.ficheUrl||null}
-      }));
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({vehicles:toSave,nid,savedAt:new Date().toISOString()}));
+      for(const v of vehicles) await saveVehicle(v);
       setSaveInd('ok');
     }catch(e){setSaveInd('error');}
-  }, 600);
+  },600);
 }
 
-function loadVehicles(){
+async function loadVehicles(){
   setSaveInd('loading');
   try{
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if(raw){
-      const data = JSON.parse(raw);
-      nid = data.nid||1;
-      vehicles = (data.vehicles||[]).map(s=>{
-        const steps = makeSteps(s.opts);
-        return{...s,steps,color:s.color||'',
-          daysAgo:calcDaysAgo(s.createdAt),
-          docs:{carfax:s.docs?.carfax??null,inspection:s.docs?.inspection??null,
-                estimation:s.docs?.estimation??null,driveFolder:s.docs?.driveFolder||null,folderId:s.docs?.folderId||null,scanning:false,
-                enligne:s.docs?.enligne??null,photos:s.docs?.photos??null,ficheUrl:s.docs?.ficheUrl||null,scanningWeb:false}};
-      });
-      setSaveInd('ok', vehicles.length+' dossier'+(vehicles.length>1?'s':'')+' chargé'+(vehicles.length>1?'s':''));
-    } else {
-      setSaveInd('ok','Aucun dossier — commencez par en créer un');
-    }
-  }catch(e){setSaveInd('error');}
+    const res = await fetch('/api/vehicles');
+    const rows = await res.json();
+    vehicles = rows.map(s=>{
+      const opts = s.opts||{};
+      const steps = makeSteps(opts);
+      const sd = s.sd||steps.map(()=>({done:false,doneDay:null}));
+      const docs = s.docs||{};
+      return{
+        id:s.id,stock:s.stock,year:s.year,make:s.make,model:s.model,
+        km:s.km,price:s.price,color:s.color||'',resp:s.resp,
+        createdAt:new Date(s.created_at).getTime(),
+        daysAgo:calcDaysAgo(new Date(s.created_at).getTime()),
+        opts:opts,steps:steps,sd:sd,expanded:s.expanded||false,
+        docs:{carfax:docs.carfax??null,inspection:docs.inspection??null,
+              estimation:docs.estimation??null,driveFolder:docs.driveFolder||null,
+              folderId:docs.folderId||null,scanning:false,
+              enligne:docs.enligne??null,photos:docs.photos??null,
+              ficheUrl:docs.ficheUrl||null,scanningWeb:false}
+      };
+    });
+    if(vehicles.length) nid=Math.max(...vehicles.map(v=>v.id))+1;
+    setSaveInd('ok', vehicles.length+' dossier'+(vehicles.length>1?'s':'')+' chargé'+(vehicles.length>1?'s':''));
+    if(!vehicles.length) setSaveInd('ok','Aucun dossier — commencez par en créer un');
+  }catch(e){setSaveInd('error');console.error('loadVehicles:',e);}
   renderAll();
   updateMyTasksBanner();
 }
@@ -643,11 +653,12 @@ function toggle(id){
   if(v){v.expanded=!v.expanded;saveVehicles();renderAll();}
 }
 
-function deleteV(id){
+async function deleteV(id){
   const v=vehicles.find(x=>x.id===id);
   if(!v||!confirm('Supprimer le dossier '+v.year+' '+v.make+' '+v.model+' (#'+v.stock+') ?'))return;
+  try{await fetch('/api/vehicles/'+v.stock,{method:'DELETE'});}catch(e){console.error(e);}
   vehicles=vehicles.filter(x=>x.id!==id);
-  saveVehicles();renderAll();
+  renderAll();
   showNotif('<i class="ti ti-trash"></i> Dossier #'+v.stock+' supprimé','warn');
 }
 
@@ -822,7 +833,7 @@ function clearNotif(){document.getElementById('notif-bar').innerHTML='';}
 function openModal(){document.getElementById('modal').classList.add('open');}
 function closeModal(){document.getElementById('modal').classList.remove('open');}
 
-function addVehicle(){
+async function addVehicle(){
   const stock=(document.getElementById('f-stk').value||'').trim().toUpperCase();
   if(!stock){alert('Entrez un numéro de stock.');return;}
   if(vehicles.find(v=>v.stock===stock)){alert('Le stock #'+stock+' existe déjà.');return;}
@@ -847,12 +858,15 @@ function addVehicle(){
     docs:{carfax:null,inspection:null,estimation:null,driveFolder:null,folderId:null,scanning:false,enligne:null,photos:null,ficheUrl:null,scanningWeb:false},
     expanded:true
   };
+  try{
+    await fetch('/api/vehicles',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({stock,year,make,model,km,price,color,resp,opts,sd:newV.sd,docs:newV.docs,expanded:true})});
+  }catch(e){console.error('POST vehicle:',e);}
   vehicles.unshift(newV);
   closeModal();
-  // Auto-create Drive folder
   setTimeout(()=>createDriveFolder(newV.id),500);
   ['f-stk','f-yr','f-mk','f-mo','f-km','f-pr','f-col'].forEach(id=>{document.getElementById(id).value='';});
-  saveVehicles();renderAll();
+  renderAll();
   showNotif('<i class="ti ti-check"></i> Dossier créé — <strong>'+year+' '+make+' '+model+'</strong> (#'+stock+')','ok');
 }
 
