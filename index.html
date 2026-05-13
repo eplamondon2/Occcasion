@@ -1278,7 +1278,7 @@ function renderPR(){
     const rm = (item.roues_mags||'').toLowerCase();
     const rmBadge = rm.indexOf('mag')!==-1 ? '<span class="pr-badge pr-badge-mag">Mag</span>' :
       rm.indexOf('roue')!==-1 ? '<span class="pr-badge pr-badge-roue">Roue</span>' : item.roues_mags||'';
-    return '<tr class="' + (item.vendu?'vendu':'') + '">'
+    return '<tr class="' + (item.vendu?'vendu':'') + '" onclick="showPRDetail(&quot;'+item.id+'&quot;)" style="cursor:pointer">'
       + '<td style="font-family:monospace;font-weight:600">' + item.id + '</td>'
       + '<td>' + (item.type==='pneu'?'🔵 Pneu':'⚫ Roue') + '</td>'
       + '<td>' + (item.marque_vehicule||'') + '</td>'
@@ -1350,9 +1350,19 @@ function openPRModal(id){
   } else {
     title.textContent = 'Ajouter pneu / roue';
     document.getElementById('pr-id').disabled = false;
-    ['pr-id','pr-marque-v','pr-modele-v','pr-annee','pr-stock-v','pr-marque-p','pr-modele-p','pr-usure','pr-grandeur','pr-bolt','pr-loc','pr-prix','pr-notes'].forEach(function(id){
-      document.getElementById(id).value='';
+    ['pr-id','pr-marque-v','pr-modele-v','pr-annee','pr-stock-v','pr-marque-p','pr-modele-p','pr-usure','pr-grandeur','pr-bolt','pr-loc','pr-prix','pr-notes'].forEach(function(eid){
+      document.getElementById(eid).value='';
     });
+    // Auto-generate next ID
+    const type = document.getElementById('pr-f-type-modal').value;
+    const prefix = type === 'pneu' ? 'PU' : 'RU';
+    const existing = prItems.filter(function(i){return i.id.startsWith(prefix);});
+    let maxNum = 0;
+    existing.forEach(function(i){
+      const n = parseInt(i.id.replace(prefix,''));
+      if(!isNaN(n) && n > maxNum) maxNum = n;
+    });
+    document.getElementById('pr-id').value = prefix + String(maxNum+1).padStart(5,'0');
   }
   updatePRForm();
   modal.style.display='flex';
@@ -1374,6 +1384,18 @@ function updatePRForm(){
   const type = document.getElementById('pr-f-type-modal').value;
   document.querySelectorAll('.pr-pneu-field').forEach(function(el){el.style.display=type==='pneu'?'':'none';});
   document.querySelectorAll('.pr-roue-field').forEach(function(el){el.style.display=type==='roue'?'':'none';});
+  // Update auto-ID if field is empty or has old prefix
+  if(!prEditId){
+    const idField = document.getElementById('pr-id');
+    const prefix = type === 'pneu' ? 'PU' : 'RU';
+    const existing = prItems.filter(function(i){return i.id.startsWith(prefix);});
+    let maxNum = 0;
+    existing.forEach(function(i){
+      const n = parseInt(i.id.replace(prefix,''));
+      if(!isNaN(n) && n > maxNum) maxNum = n;
+    });
+    idField.value = prefix + String(maxNum+1).padStart(5,'0');
+  }
 }
 
 function editPR(id){ openPRModal(id); }
@@ -1422,68 +1444,93 @@ async function deletePR(id){
   updatePRStats();
 }
 
+// Detail panel for quick actions
+function showPRDetail(id){
+  const item = prItems.find(function(i){return i.id===id;});
+  if(!item) return;
+  const canEdit = CAN_EDIT_PR.includes(currentUser);
+  const existing = document.getElementById('pr-detail-panel');
+  if(existing) existing.remove();
+  
+  const panel = document.createElement('div');
+  panel.id = 'pr-detail-panel';
+  panel.style.cssText = 'position:fixed;bottom:0;left:0;right:0;background:var(--card);border-top:2px solid var(--blue);padding:16px 20px;z-index:150;box-shadow:0 -4px 20px rgba(0,0,0,.15);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px';
+  
+  const saison = (item.saison||'').toUpperCase().indexOf('HIVER')!==-1?'❄️ Hiver':(item.saison||'').toUpperCase().indexOf('ET')!==-1?'☀️ Été':item.saison||'';
+  const info = '<strong>'+item.id+'</strong> — '+(item.marque_vehicule||'')+' '+(item.modele_vehicule||'')+' '+(item.annee_vehicule||'')+' · '+(item.grandeur||item.dimension||'')+' · '+saison+' · '+(item.localisation||'')+' · '+(item.prix?item.prix+'$':'N/D');
+  
+  panel.innerHTML = '<div style="font-size:13px">'+info+'</div>'
+    + '<div style="display:flex;gap:8px;align-items:center">'
+    + (canEdit && !item.vendu ? '<button class="btn-primary" style="font-size:12px;padding:7px 14px" onclick="markVenduFromPanel(&quot;'+item.id+'&quot;)"><i class="ti ti-tag" style="font-size:12px"></i> Marquer vendu</button>' : '')
+    + (canEdit ? '<button class="btn" style="font-size:12px;padding:7px 14px" onclick="editPR(&quot;'+item.id+'&quot;);closePRDetail()"><i class="ti ti-edit" style="font-size:12px"></i> Modifier</button>' : '')
+    + (item.vendu ? '<span style="background:#fef2f2;color:#dc2626;padding:6px 12px;border-radius:6px;font-size:12px;font-weight:600">✗ Vendu</span>' : '')
+    + '<button class="btn" style="font-size:12px;padding:7px 12px" onclick="closePRDetail()"><i class="ti ti-x" style="font-size:12px"></i></button>'
+    + '</div>';
+  
+  document.body.appendChild(panel);
+}
+
+function closePRDetail(){
+  const p = document.getElementById('pr-detail-panel');
+  if(p) p.remove();
+}
+
+async function markVenduFromPanel(id){
+  if(!confirm('Marquer '+id+' comme vendu ?')) return;
+  await fetch('/api/pneus-roues/'+id, {method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({vendu:true})});
+  closePRDetail();
+  await loadPR();
+  showNotif('<i class="ti ti-check"></i> '+id+' marqué comme vendu','ok');
+}
+
 async function importExcel(input){
   const file = input.files[0];
   if(!file) return;
-  showNotif('<div class="spin"></div> Lecture du fichier Excel…','info',0);
-  const XLSX = await import('https://cdn.sheetjs.com/xlsx-0.20.3/package/xlsx.mjs');
-  const buffer = await file.arrayBuffer();
-  const wb = XLSX.read(buffer);
-  const ws = wb.Sheets[wb.SheetNames[0]];
-  const rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
   
-  const items = [];
-  for(let i=0; i<rows.length; i++){
-    const row = rows[i];
-    const prefix = String(row[1]).trim();
-    if(prefix !== 'PU' && prefix !== 'RU') continue;
-    const soldMarker = String(row[0]).trim().toLowerCase();
-    if(soldMarker === 'x') continue; // Skip sold items
-    
-    const num = String(row[2]).trim().padStart(5,'0');
-    const id = prefix + num;
-    
-    if(prefix === 'PU'){
-      items.push({id:id, type:'pneu', vendu:false, data:{
-        stock_vehicule: String(row[3]).trim(),
-        marque_vehicule: String(row[4]).trim(),
-        modele_vehicule: String(row[5]).trim(),
-        annee_vehicule: String(row[6]).trim(),
-        marque_pneu: String(row[7]).trim(),
-        modele_pneu: String(row[8]).trim(),
-        saison: String(row[9]).trim(),
-        roues_mags: String(row[10]).trim(),
-        grandeur: String(row[11]).trim(),
-        usure: String(row[12]).trim(),
-        localisation: String(row[13]).trim(),
-        prix: String(row[14]).trim(),
-        notes: String(row[16]).trim()
-      }});
-    } else {
-      items.push({id:id, type:'roue', vendu:false, data:{
-        stock_vehicule: String(row[3]).trim(),
-        marque_vehicule: String(row[4]).trim(),
-        modele_vehicule: String(row[5]).trim(),
-        dimension: String(row[6]).trim(),
-        roues_mags: String(row[7]).trim(),
-        bolt_pattern: String(row[8]).trim(),
-        localisation: String(row[9]).trim(),
-        prix: String(row[10]).trim(),
-        notes: String(row[12]).trim()
-      }});
-    }
+  // Detect prefix from filename
+  const fname = file.name.toUpperCase();
+  const prefix = fname.includes('PNEU') ? 'PU' : fname.includes('ROUE') ? 'RU' : null;
+  if(!prefix){
+    showNotif('<i class="ti ti-alert-triangle"></i> Impossible de détecter le type — utilisez un fichier PNEUS ou ROUES','warn');
+    return;
   }
   
-  if(items.length === 0){ showNotif('Aucun item trouvé dans ce fichier','warn'); return; }
-  showNotif('<div class="spin"></div> Import de '+items.length+' items…','info',0);
-  
-  const r = await fetch('/api/pneus-roues/import', {method:'POST', headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({items:items})});
-  const d = await r.json();
-  clearNotif();
-  showNotif('<i class="ti ti-check"></i> '+d.imported+' items importés avec succès','ok');
-  await loadPR();
-  input.value='';
+  showNotif('<div class="spin"></div> Lecture du fichier Excel (détection couleurs)…','info',0);
+  try{
+    // Convert to base64 and send to server for color-aware parsing
+    const buffer = await file.arrayBuffer();
+    const bytes = new Uint8Array(buffer);
+    let binary = '';
+    for(let i=0;i<bytes.byteLength;i++) binary += String.fromCharCode(bytes[i]);
+    const base64 = btoa(binary);
+    
+    const r = await fetch('/api/import-excel', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({fileData:base64, prefix:prefix})
+    });
+    const d = await r.json();
+    if(!d.items || d.items.length === 0){ showNotif('Aucun item disponible trouvé (lignes rouges exclues)','warn'); return; }
+    
+    showNotif('<div class="spin"></div> Import de '+d.count+' items disponibles…','info',0);
+    
+    // Format items for bulk import
+    const items = d.items.map(function(item){
+      const {id, type, vendu, ...data} = item;
+      return {id:id, type:type, vendu:vendu||false, data:data};
+    });
+    
+    const r2 = await fetch('/api/pneus-roues/import', {method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({items:items})});
+    const d2 = await r2.json();
+    clearNotif();
+    showNotif('<i class="ti ti-check"></i> '+d2.imported+' items importés (lignes rouges exclues)','ok');
+    await loadPR();
+    input.value='';
+  }catch(e){
+    clearNotif();
+    showNotif('<i class="ti ti-alert-triangle"></i> Erreur import: '+e.message,'warn');
+    console.error('importExcel:', e);
+  }
 }
 </script>
 </body>
