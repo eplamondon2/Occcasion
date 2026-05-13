@@ -179,6 +179,32 @@ header{background:var(--blue);color:white;padding:0 20px;height:56px;display:fle
 .spin{display:inline-block;width:12px;height:12px;border:2px solid var(--border);border-top-color:var(--blue-mid);border-radius:50%;animation:sp .7s linear infinite}
 @keyframes sp{to{transform:rotate(360deg)}}
 
+/* TABS */
+.tab-bar{display:flex;gap:0;background:var(--blue)}
+.tab-btn{padding:10px 20px;border:none;background:transparent;color:rgba(255,255,255,.6);font-size:13px;font-weight:500;cursor:pointer;border-bottom:3px solid transparent;transition:all .2s}
+.tab-btn:hover{color:white;background:rgba(255,255,255,.1)}
+.tab-btn.active{color:white;border-bottom-color:white;background:rgba(255,255,255,.15)}
+.tab-content{display:none}
+.tab-content.active{display:block}
+
+/* PNEUS ROUES */
+.pr-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px}
+.pr-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px}
+.pr-filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;align-items:center}
+.pr-filter-select{padding:6px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:12px;background:var(--bg);color:var(--text);cursor:pointer}
+.pr-search{flex:1;min-width:180px;max-width:280px;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;background:var(--bg);color:var(--text)}
+.pr-table{width:100%;border-collapse:collapse;font-size:12px}
+.pr-table th{background:var(--border-light);padding:8px 10px;text-align:left;font-weight:600;font-size:11px;color:var(--text-muted);border-bottom:1px solid var(--border);white-space:nowrap}
+.pr-table td{padding:8px 10px;border-bottom:1px solid var(--border-light);vertical-align:top}
+.pr-table tr:hover td{background:var(--border-light)}
+.pr-table tr.vendu td{opacity:.4;text-decoration:line-through}
+.pr-badge{font-size:10px;padding:2px 7px;border-radius:20px;font-weight:600}
+.pr-badge-hiver{background:#dbeafe;color:#1e40af}
+.pr-badge-ete{background:#fef9c3;color:#854d0e}
+.pr-badge-mag{background:#ede9fe;color:#5b21b6}
+.pr-badge-roue{background:#f0fdf4;color:#166534}
+.pr-modal{background:var(--card);border-radius:16px;border:1px solid var(--border);padding:22px 24px;width:100%;max-width:560px}
+
 /* COMMENTS */
 .comments-section{margin-top:12px;border-top:1px solid var(--border);padding-top:12px}
 .comments-title{font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;display:flex;align-items:center;gap:5px}
@@ -221,6 +247,7 @@ header{background:var(--blue);color:white;padding:0 20px;height:56px;display:fle
         <option value="Nicolas Fiset">Nicolas Fiset — Esthétique</option>
         <option value="Charles Boivin">Charles Boivin — Photos</option>
         <option value="Vincent Bouchard">Vincent Bouchard — Dir. pièces / Inspection</option>
+        <option value="Yves Huard">Yves Huard — Pneus &amp; Roues</option>
       </select>
     </div>
     <div class="fg">
@@ -250,7 +277,11 @@ header{background:var(--blue);color:white;padding:0 20px;height:56px;display:fle
 
   <div class="notif-bar" id="notif-bar"></div>
 
-  <div class="main">
+  <div class="tab-bar" id="tab-bar" style="background:var(--blue);padding:0 20px;display:flex;gap:0">
+    <button class="tab-btn active" id="tab-vo" onclick="switchTab('vo')">🚗 Mise en marché</button>
+    <button class="tab-btn" id="tab-pr" onclick="switchTab('pr')">🔧 Pneus & Roues</button>
+  </div>
+  <div class="tab-content active" id="tab-content-vo"><div class="main">
     <div class="stats">
       <div class="stat"><div class="stat-label">En cours</div><div class="stat-val blue" id="s-active">–</div></div>
       <div class="stat"><div class="stat-label">Complétés</div><div class="stat-val green" id="s-done">–</div></div>
@@ -291,6 +322,113 @@ header{background:var(--blue);color:white;padding:0 20px;height:56px;display:fle
     </div>
 
     <div id="vlist"></div>
+  </div>
+  </div><!-- end tab-content-vo -->
+
+  <!-- PNEUS & ROUES TAB -->
+  <div class="tab-content" id="tab-content-pr">
+    <div class="main">
+      <div class="pr-header">
+        <div>
+          <h2 style="font-size:17px;font-weight:500;display:flex;align-items:center;gap:8px">🔧 Pneus &amp; Roues — Inventaire</h2>
+          <p style="font-size:11px;color:var(--text-muted);margin-top:2px">Hyundai St-Raymond · PU-XXXXX pneus · RU-XXXXX roues</p>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <label class="btn" style="cursor:pointer"><i class="ti ti-upload" style="font-size:14px"></i> Importer Excel<input type="file" id="pr-import-file" accept=".xlsx" style="display:none" onchange="importExcel(this)"></label>
+          <button class="btn btn-primary" onclick="openPRModal()"><i class="ti ti-plus" style="font-size:14px"></i> Ajouter</button>
+        </div>
+      </div>
+      <div class="pr-stats">
+        <div class="sc"><div class="sl">Total pneus</div><div class="sv blue" id="pr-s-pneus">–</div></div>
+        <div class="sc"><div class="sl">Total roues</div><div class="sv blue" id="pr-s-roues">–</div></div>
+        <div class="sc"><div class="sl">Hiver dispo</div><div class="sv" id="pr-s-hiver">–</div></div>
+        <div class="sc"><div class="sl">Été dispo</div><div class="sv" id="pr-s-ete">–</div></div>
+      </div>
+      <div class="pr-filters">
+        <input type="text" class="pr-search" id="pr-search" placeholder="Rechercher grandeur, marque, modèle..." oninput="renderPR()">
+        <select class="pr-filter-select" id="pr-f-type" onchange="renderPR()">
+          <option value="">Pneus &amp; Roues</option>
+          <option value="pneu">Pneus seulement</option>
+          <option value="roue">Roues seulement</option>
+        </select>
+        <select class="pr-filter-select" id="pr-f-saison" onchange="renderPR()">
+          <option value="">Toutes saisons</option>
+          <option value="HIVER">Hiver</option>
+          <option value="ETE">Été</option>
+        </select>
+        <select class="pr-filter-select" id="pr-f-roue" onchange="renderPR()">
+          <option value="">Roues &amp; Mags</option>
+          <option value="Roue">Avec roues</option>
+          <option value="Mag">Avec mags</option>
+          <option value="Non">Sans roues</option>
+        </select>
+        <select class="pr-filter-select" id="pr-f-vendu" onchange="renderPR()">
+          <option value="false">Disponibles</option>
+          <option value="true">Vendus</option>
+          <option value="">Tous</option>
+        </select>
+        <span id="pr-count" style="font-size:12px;color:var(--text-muted)"></span>
+      </div>
+      <div style="overflow-x:auto;border-radius:var(--radius);border:1px solid var(--border)">
+        <table class="pr-table">
+          <thead>
+            <tr>
+              <th># Inv</th><th>Type</th><th>Marque véh.</th><th>Modèle véh.</th><th>Année</th>
+              <th>Grandeur / Dim.</th><th>Marque pneu</th><th>Modèle pneu</th>
+              <th>Saison</th><th>Roues/Mags</th><th>Usure</th><th>Bolt Pattern</th>
+              <th>Localisation</th><th>Prix</th><th>Notes</th><th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="pr-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL PR -->
+<div class="modal-overlay" id="pr-modal" style="display:none">
+  <div class="modal" style="max-width:580px">
+    <h3><i class="ti ti-tire" style="color:var(--blue-mid)"></i> <span id="pr-modal-title">Ajouter pneu / roue</span></h3>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="fg"><label>Type</label>
+        <select id="pr-f-type-modal" onchange="updatePRForm()">
+          <option value="pneu">Pneu</option>
+          <option value="roue">Roue</option>
+        </select>
+      </div>
+      <div class="fg"><label># Inventaire</label><input id="pr-id" placeholder="ex: PU00076 ou RU00036"></div>
+      <div class="fg"><label>Marque véhicule</label><input id="pr-marque-v" placeholder="Hyundai"></div>
+      <div class="fg"><label>Modèle véhicule</label><input id="pr-modele-v" placeholder="Tucson"></div>
+      <div class="fg"><label>Année véhicule</label><input id="pr-annee" placeholder="2022"></div>
+      <div class="fg"><label># Stock véhicule</label><input id="pr-stock-v" placeholder="7380A"></div>
+      <div class="fg pr-pneu-field"><label>Marque pneu</label><input id="pr-marque-p" placeholder="Michelin"></div>
+      <div class="fg pr-pneu-field"><label>Modèle pneu</label><input id="pr-modele-p" placeholder="X-Ice"></div>
+      <div class="fg pr-pneu-field"><label>Saison</label>
+        <select id="pr-saison">
+          <option value="HIVER">Hiver</option>
+          <option value="ETE">Été</option>
+          <option value="4 SAISONS">4 saisons</option>
+        </select>
+      </div>
+      <div class="fg pr-pneu-field"><label>Usure</label><input id="pr-usure" placeholder="10/32"></div>
+      <div class="fg"><label>Grandeur / Dimension</label><input id="pr-grandeur" placeholder="225/60/17 ou 17&quot;"></div>
+      <div class="fg"><label>Roues / Mags</label>
+        <select id="pr-roues-mags">
+          <option value="Non">Sans roues</option>
+          <option value="Roue">Avec roues</option>
+          <option value="Mag">Avec mags</option>
+        </select>
+      </div>
+      <div class="fg pr-roue-field" style="display:none"><label>Bolt Pattern</label><input id="pr-bolt" placeholder="5X114,3"></div>
+      <div class="fg"><label>Localisation</label><input id="pr-loc" placeholder="A2, CONTAINER..."></div>
+      <div class="fg"><label>Prix ($)</label><input type="number" id="pr-prix" placeholder="800"></div>
+    </div>
+    <div class="fg"><label>Notes</label><input id="pr-notes" placeholder="Informations supplémentaires..."></div>
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">
+      <button class="btn" onclick="closePRModal()">Annuler</button>
+      <button class="btn btn-primary" onclick="savePRItem()">Sauvegarder</button>
+    </div>
   </div>
 </div>
 
@@ -345,6 +483,7 @@ const TEAM = {
   'Nicolas Fiset': {role:'Esthétique', initials:'NF', email:'autofiset@outlook.com'},
   'Charles Boivin': {role:'Photos', initials:'CB', email:'charles.boivin@hyundaistraymond.ca'},
   'Vincent Bouchard': {role:'Dir. pièces / Inspection', initials:'VB', email:'vbouchard@hyundaistraymond.ca'},
+  'Yves Huard': {role:'Pneus & Roues', initials:'YH', email:''},
 };
 
 const STEPS_DEF = [
@@ -1047,6 +1186,305 @@ async function addVehicle(){
 
 const saved=sessionStorage.getItem('vo-user');
 if(saved){currentUser=saved;showApp();}
+
+// ===== PNEUS & ROUES =====
+let prItems = [];
+let prSort = {key:'id', dir:1};
+let prEditId = null;
+
+const CAN_EDIT_PR = ['Etienne Plamondon','Serge Grenier','Nicolas Rivard','Yves Huard'];
+
+function switchTab(tab){
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(c=>c.classList.remove('active'));
+  document.getElementById('tab-'+tab).classList.add('active');
+  document.getElementById('tab-content-'+tab).classList.add('active');
+  if(tab==='pr' && prItems.length===0) loadPR();
+}
+
+// Wrap existing app in tab-content
+document.addEventListener('DOMContentLoaded', function(){
+  const appScreen = document.getElementById('app-screen');
+  if(appScreen){
+    const voContent = appScreen.querySelector('.tab-content');
+    if(!voContent){
+      const mainDiv = appScreen.querySelector('.main');
+      if(mainDiv){
+        const wrapper = document.createElement('div');
+        wrapper.className = 'tab-content active';
+        wrapper.id = 'tab-content-vo';
+        mainDiv.parentNode.insertBefore(wrapper, mainDiv);
+        wrapper.appendChild(mainDiv);
+      }
+    }
+  }
+});
+
+async function loadPR(){
+  try{
+    const r = await fetch('/api/pneus-roues');
+    const rows = await r.json();
+    prItems = rows.map(function(row){
+      const d = row.data || {};
+      return Object.assign({}, d, {id: row.id, type: row.type, vendu: row.vendu, created_at: row.created_at});
+    });
+    renderPR();
+    updatePRStats();
+  }catch(e){console.error('loadPR:',e);}
+}
+
+function renderPR(){
+  const search = (document.getElementById('pr-search')?.value||'').toLowerCase();
+  const fType = document.getElementById('pr-f-type')?.value||'';
+  const fSaison = document.getElementById('pr-f-saison')?.value||'';
+  const fRoue = document.getElementById('pr-f-roue')?.value||'';
+  const fVendu = document.getElementById('pr-f-vendu')?.value;
+
+  let list = prItems.filter(function(item){
+    if(fType && item.type !== fType) return false;
+    if(fVendu !== '' && fVendu !== undefined && String(item.vendu) !== fVendu) return false;
+    if(fSaison && (item.saison||'').toUpperCase().indexOf(fSaison) === -1) return false;
+    if(fRoue){
+      const rm = (item.roues_mags||'').toLowerCase();
+      if(fRoue === 'Roue' && rm.indexOf('roue') === -1) return false;
+      if(fRoue === 'Mag' && rm.indexOf('mag') === -1) return false;
+      if(fRoue === 'Non' && rm !== 'non') return false;
+    }
+    if(search){
+      const searchable = [item.id,item.marque_vehicule,item.modele_vehicule,item.marque_pneu,item.modele_pneu,item.grandeur,item.dimension,item.localisation,item.bolt_pattern,item.saison].join(' ').toLowerCase();
+      if(searchable.indexOf(search) === -1) return false;
+    }
+    return true;
+  });
+
+  // Sort
+  list.sort(function(a,b){
+    const aVal = String(a[prSort.key]||'');
+    const bVal = String(b[prSort.key]||'');
+    return aVal.localeCompare(bVal) * prSort.dir;
+  });
+
+  const count = document.getElementById('pr-count');
+  if(count) count.textContent = list.length + ' résultat' + (list.length>1?'s':'');
+
+  const tbody = document.getElementById('pr-tbody');
+  if(!tbody) return;
+  const canEdit = CAN_EDIT_PR.includes(currentUser);
+
+  tbody.innerHTML = list.map(function(item){
+    const saison = (item.saison||'').toUpperCase();
+    const saisonBadge = saison.indexOf('HIVER')!==-1 ? '<span class="pr-badge pr-badge-hiver">❄️ Hiver</span>' :
+      saison.indexOf('ET')!==-1 ? '<span class="pr-badge pr-badge-ete">☀️ Été</span>' : item.saison||'';
+    const rm = (item.roues_mags||'').toLowerCase();
+    const rmBadge = rm.indexOf('mag')!==-1 ? '<span class="pr-badge pr-badge-mag">Mag</span>' :
+      rm.indexOf('roue')!==-1 ? '<span class="pr-badge pr-badge-roue">Roue</span>' : item.roues_mags||'';
+    return '<tr class="' + (item.vendu?'vendu':'') + '">'
+      + '<td style="font-family:monospace;font-weight:600">' + item.id + '</td>'
+      + '<td>' + (item.type==='pneu'?'🔵 Pneu':'⚫ Roue') + '</td>'
+      + '<td>' + (item.marque_vehicule||'') + '</td>'
+      + '<td>' + (item.modele_vehicule||'') + '</td>'
+      + '<td>' + (item.annee_vehicule||'') + '</td>'
+      + '<td style="font-weight:600">' + (item.grandeur||item.dimension||'') + '</td>'
+      + '<td>' + (item.marque_pneu||'') + '</td>'
+      + '<td>' + (item.modele_pneu||'') + '</td>'
+      + '<td>' + saisonBadge + '</td>'
+      + '<td>' + rmBadge + '</td>'
+      + '<td>' + (item.usure||'') + '</td>'
+      + '<td>' + (item.bolt_pattern||'') + '</td>'
+      + '<td>' + (item.localisation||'') + '</td>'
+      + '<td>' + (item.prix ? item.prix+'$' : '') + '</td>'
+      + '<td style="font-size:11px;color:var(--text-muted);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (item.notes||'') + '</td>'
+      + '<td style="white-space:nowrap">'
+      + (canEdit ? '<button class="btn-sm" onclick="editPR(&quot;'+item.id+'&quot;)"><i class="ti ti-edit" style="font-size:11px"></i></button> ' : '')
+      + (canEdit && !item.vendu ? '<button class="btn-sm" style="border-color:#1D9E75;color:#0F6E56" onclick="markVendu(&quot;'+item.id+'&quot;)">Vendu</button> ' : '')
+      + (canEdit ? '<button class="btn-sm danger" onclick="deletePR(&quot;'+item.id+'&quot;)"><i class="ti ti-trash" style="font-size:11px"></i></button>' : '')
+      + '</td>'
+      + '</tr>';
+  }).join('');
+}
+
+function updatePRStats(){
+  const avail = prItems.filter(function(i){return !i.vendu;});
+  const el1 = document.getElementById('pr-s-pneus');
+  const el2 = document.getElementById('pr-s-roues');
+  const el3 = document.getElementById('pr-s-hiver');
+  const el4 = document.getElementById('pr-s-ete');
+  if(el1) el1.textContent = avail.filter(function(i){return i.type==='pneu';}).length;
+  if(el2) el2.textContent = avail.filter(function(i){return i.type==='roue';}).length;
+  if(el3) el3.textContent = avail.filter(function(i){return (i.saison||'').toUpperCase().indexOf('HIVER')!==-1;}).length;
+  if(el4) el4.textContent = avail.filter(function(i){return (i.saison||'').toUpperCase().indexOf('ET')!==-1;}).length;
+}
+
+function sortPR(key){
+  if(prSort.key===key) prSort.dir *= -1;
+  else { prSort.key=key; prSort.dir=1; }
+  renderPR();
+}
+
+function openPRModal(id){
+  prEditId = id||null;
+  const modal = document.getElementById('pr-modal');
+  const title = document.getElementById('pr-modal-title');
+  if(id){
+    title.textContent = 'Modifier ' + id;
+    const item = prItems.find(function(i){return i.id===id;});
+    if(item){
+      document.getElementById('pr-f-type-modal').value = item.type||'pneu';
+      document.getElementById('pr-id').value = item.id;
+      document.getElementById('pr-id').disabled = true;
+      document.getElementById('pr-marque-v').value = item.marque_vehicule||'';
+      document.getElementById('pr-modele-v').value = item.modele_vehicule||'';
+      document.getElementById('pr-annee').value = item.annee_vehicule||'';
+      document.getElementById('pr-stock-v').value = item.stock_vehicule||'';
+      document.getElementById('pr-marque-p').value = item.marque_pneu||'';
+      document.getElementById('pr-modele-p').value = item.modele_pneu||'';
+      document.getElementById('pr-saison').value = item.saison||'HIVER';
+      document.getElementById('pr-usure').value = item.usure||'';
+      document.getElementById('pr-grandeur').value = item.grandeur||item.dimension||'';
+      document.getElementById('pr-roues-mags').value = item.roues_mags||'Non';
+      document.getElementById('pr-bolt').value = item.bolt_pattern||'';
+      document.getElementById('pr-loc').value = item.localisation||'';
+      document.getElementById('pr-prix').value = item.prix||'';
+      document.getElementById('pr-notes').value = item.notes||'';
+    }
+  } else {
+    title.textContent = 'Ajouter pneu / roue';
+    document.getElementById('pr-id').disabled = false;
+    ['pr-id','pr-marque-v','pr-modele-v','pr-annee','pr-stock-v','pr-marque-p','pr-modele-p','pr-usure','pr-grandeur','pr-bolt','pr-loc','pr-prix','pr-notes'].forEach(function(id){
+      document.getElementById(id).value='';
+    });
+  }
+  updatePRForm();
+  modal.style.display='flex';
+  modal.style.position='fixed';
+  modal.style.inset='0';
+  modal.style.background='rgba(0,0,0,.45)';
+  modal.style.zIndex='200';
+  modal.style.alignItems='flex-start';
+  modal.style.justifyContent='center';
+  modal.style.padding='60px 16px 16px';
+  modal.style.overflowY='auto';
+}
+
+function closePRModal(){
+  document.getElementById('pr-modal').style.display='none';
+}
+
+function updatePRForm(){
+  const type = document.getElementById('pr-f-type-modal').value;
+  document.querySelectorAll('.pr-pneu-field').forEach(function(el){el.style.display=type==='pneu'?'':'none';});
+  document.querySelectorAll('.pr-roue-field').forEach(function(el){el.style.display=type==='roue'?'':'none';});
+}
+
+function editPR(id){ openPRModal(id); }
+
+async function savePRItem(){
+  const type = document.getElementById('pr-f-type-modal').value;
+  const id = document.getElementById('pr-id').value.trim().toUpperCase();
+  if(!id){ alert('Entrez un # inventaire'); return; }
+  const data = {
+    marque_vehicule: document.getElementById('pr-marque-v').value.trim(),
+    modele_vehicule: document.getElementById('pr-modele-v').value.trim(),
+    annee_vehicule: document.getElementById('pr-annee').value.trim(),
+    stock_vehicule: document.getElementById('pr-stock-v').value.trim(),
+    marque_pneu: type==='pneu'?document.getElementById('pr-marque-p').value.trim():'',
+    modele_pneu: type==='pneu'?document.getElementById('pr-modele-p').value.trim():'',
+    saison: type==='pneu'?document.getElementById('pr-saison').value:'',
+    usure: type==='pneu'?document.getElementById('pr-usure').value.trim():'',
+    grandeur: type==='pneu'?document.getElementById('pr-grandeur').value.trim():'',
+    dimension: type==='roue'?document.getElementById('pr-grandeur').value.trim():'',
+    roues_mags: document.getElementById('pr-roues-mags').value,
+    bolt_pattern: type==='roue'?document.getElementById('pr-bolt').value.trim():'',
+    localisation: document.getElementById('pr-loc').value.trim(),
+    prix: document.getElementById('pr-prix').value.trim(),
+    notes: document.getElementById('pr-notes').value.trim()
+  };
+  try{
+    await fetch('/api/pneus-roues', {method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({id:id, type:type, data:data, vendu:false})});
+    closePRModal();
+    await loadPR();
+  }catch(e){alert('Erreur: '+e.message);}
+}
+
+async function markVendu(id){
+  if(!confirm('Marquer '+id+' comme vendu ?')) return;
+  await fetch('/api/pneus-roues/'+id, {method:'PATCH', headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({vendu:true})});
+  await loadPR();
+}
+
+async function deletePR(id){
+  if(!confirm('Supprimer '+id+' définitivement ?')) return;
+  await fetch('/api/pneus-roues/'+id, {method:'DELETE'});
+  prItems = prItems.filter(function(i){return i.id!==id;});
+  renderPR();
+  updatePRStats();
+}
+
+async function importExcel(input){
+  const file = input.files[0];
+  if(!file) return;
+  showNotif('<div class="spin"></div> Lecture du fichier Excel…','info',0);
+  const XLSX = await import('https://cdn.sheetjs.com/xlsx-0.20.3/package/xlsx.mjs');
+  const buffer = await file.arrayBuffer();
+  const wb = XLSX.read(buffer);
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+  
+  const items = [];
+  for(let i=0; i<rows.length; i++){
+    const row = rows[i];
+    const prefix = String(row[1]).trim();
+    if(prefix !== 'PU' && prefix !== 'RU') continue;
+    const soldMarker = String(row[0]).trim().toLowerCase();
+    if(soldMarker === 'x') continue; // Skip sold items
+    
+    const num = String(row[2]).trim().padStart(5,'0');
+    const id = prefix + num;
+    
+    if(prefix === 'PU'){
+      items.push({id:id, type:'pneu', vendu:false, data:{
+        stock_vehicule: String(row[3]).trim(),
+        marque_vehicule: String(row[4]).trim(),
+        modele_vehicule: String(row[5]).trim(),
+        annee_vehicule: String(row[6]).trim(),
+        marque_pneu: String(row[7]).trim(),
+        modele_pneu: String(row[8]).trim(),
+        saison: String(row[9]).trim(),
+        roues_mags: String(row[10]).trim(),
+        grandeur: String(row[11]).trim(),
+        usure: String(row[12]).trim(),
+        localisation: String(row[13]).trim(),
+        prix: String(row[14]).trim(),
+        notes: String(row[16]).trim()
+      }});
+    } else {
+      items.push({id:id, type:'roue', vendu:false, data:{
+        stock_vehicule: String(row[3]).trim(),
+        marque_vehicule: String(row[4]).trim(),
+        modele_vehicule: String(row[5]).trim(),
+        dimension: String(row[6]).trim(),
+        roues_mags: String(row[7]).trim(),
+        bolt_pattern: String(row[8]).trim(),
+        localisation: String(row[9]).trim(),
+        prix: String(row[10]).trim(),
+        notes: String(row[12]).trim()
+      }});
+    }
+  }
+  
+  if(items.length === 0){ showNotif('Aucun item trouvé dans ce fichier','warn'); return; }
+  showNotif('<div class="spin"></div> Import de '+items.length+' items…','info',0);
+  
+  const r = await fetch('/api/pneus-roues/import', {method:'POST', headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({items:items})});
+  const d = await r.json();
+  clearNotif();
+  showNotif('<i class="ti ti-check"></i> '+d.imported+' items importés avec succès','ok');
+  await loadPR();
+  input.value='';
+}
 </script>
 </body>
 </html>
