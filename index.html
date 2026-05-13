@@ -768,38 +768,28 @@ async function checkWeb(vid){
   const v=vehicles.find(x=>x.id===vid);
   if(!v||v.docs.scanningWeb)return;
   v.docs.scanningWeb=true;renderAll();
+  const PROXY='https://script.google.com/macros/s/AKfycby0XEXoiS9f2gkdOlyBelpWJ8Nix2YHo2ILOvKkcYdzFElVcBGhFAD9StK9AGnr55slyQ/exec';
   try{
-    // Use corsproxy to bypass CORS restriction
-    const proxyUrl='https://script.google.com/macros/s/AKfycby0XEXoiS9f2gkdOlyBelpWJ8Nix2YHo2ILOvKkcYdzFElVcBGhFAD9StK9AGnr55slyQ/exec';
-    const r=await fetch(proxyUrl,{signal:AbortSignal.timeout(20000)});
+    // Step 1: Get inventory to find vehicle
+    const r=await fetch(PROXY,{signal:AbortSignal.timeout(20000)});
     const inventory=await r.json();
     const vehicle=inventory.find(x=>(x['stock number']||'').toUpperCase()===v.stock.toUpperCase());
     if(!vehicle){
       v.docs.enligne=false;v.docs.photos=0;v.docs.webScanned=true;
     } else {
       v.docs.enligne=true;v.docs.webScanned=true;
-      const mainPic=vehicle['main picture']||'';
       const d2cId=vehicle['D2C Vehicle ID'];
       const vdp=(vehicle['Vehicle Details Page (VDP)']||'').replace('/used/','/occasion/');
       if(vdp)v.docs.ficheUrl=vdp;
+      // Step 2: Count photos via Apps Script proxy
       let photos=0;
-      if(mainPic&&d2cId){
-        const tokenMatch=mainPic.match(/imagescdn\.d2cmedia\.ca\/([^\/]+)\//);
-        const token=tokenMatch?tokenMatch[1]:null;
-        if(token){
-          const make=(vehicle.make||'').replace(/ /g,'_');
-          const model=(vehicle.model||'').replace(/ /g,'_');
-          const year=vehicle.year||'';
-          let i=1,found=true;
-          while(found&&i<=50){
-            try{
-              const url='https://imagescdn.d2cmedia.ca/'+token+'/1918/'+d2cId+'/'+i+'/'+make+'-'+model+'-'+year+'.jpg';
-              const pr=await fetch(url,{method:'HEAD',signal:AbortSignal.timeout(2000)});
-              if(pr.ok){photos=i;i++;}else{found=false;}
-            }catch(e){found=false;}
-          }
-        }
-        if(photos===0&&mainPic)photos=1;
+      if(d2cId&&vdp){
+        try{
+          const photoUrl=PROXY+'?ficheUrl='+encodeURIComponent(vdp)+'&d2cId='+d2cId;
+          const pr=await fetch(photoUrl,{signal:AbortSignal.timeout(30000)});
+          const pd=await pr.json();
+          photos=pd.photos||0;
+        }catch(e){console.error('photo count:',e.message);}
       }
       v.docs.photos=photos;
     }
