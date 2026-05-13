@@ -770,7 +770,7 @@ async function checkWeb(vid){
   v.docs.scanningWeb=true;renderAll();
   try{
     // Use corsproxy to bypass CORS restriction
-    const proxyUrl='https://corsproxy.io/?url='+encodeURIComponent('https://www.hyundaistraymond.com/js/json/chatboost/inventory/inventory-index.json');
+    const proxyUrl='https://script.google.com/macros/s/AKfycby0XEXoiS9f2gkdOlyBelpWJ8Nix2YHo2ILOvKkcYdzFElVcBGhFAD9StK9AGnr55slyQ/exec';
     const r=await fetch(proxyUrl,{signal:AbortSignal.timeout(20000)});
     const inventory=await r.json();
     const vehicle=inventory.find(x=>(x['stock number']||'').toUpperCase()===v.stock.toUpperCase());
