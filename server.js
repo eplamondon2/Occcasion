@@ -316,6 +316,112 @@ app.delete('/api/pneus-roues/:id', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// Import Excel with color detection (server-side)
+app.post('/api/import-excel', async (req, res) => {
+  const { fileData, prefix } = req.body;
+  if (!fileData || !prefix) return res.status(400).json({ error: 'fileData et prefix requis' });
+  
+  const { exec } = require('child_process');
+  const fs = require('fs');
+  const path = require('path');
+  
+  // Write base64 to temp file
+  const tmpFile = '/tmp/import_' + Date.now() + '.xlsx';
+  const outFile = tmpFile + '.json';
+  
+  try {
+    fs.writeFileSync(tmpFile, Buffer.from(fileData, 'base64'));
+    
+    // Python script to parse Excel with color detection
+    const pyScript = `
+import sys, json, openpyxl
+
+wb = openpyxl.load_workbook('${tmpFile}')
+ws = wb.active
+items = []
+
+for row in ws.iter_rows():
+    prefix_cell = row[1]
+    if str(prefix_cell.value).strip() != '${prefix}':
+        continue
+    
+    # Check if row has red fill (FFFF0000)
+    is_red = False
+    for cell in row[:18]:
+        try:
+            fill = cell.fill
+            if fill and fill.fgColor and fill.fgColor.type == 'rgb':
+                rgb = fill.fgColor.rgb or ''
+                if rgb.upper() == 'FFFF0000':
+                    is_red = True
+                    break
+        except:
+            pass
+    
+    if is_red:
+        continue
+    
+    def v(r, i):
+        val = r[i].value if i < len(r) else None
+        s = str(val).strip() if val is not None else ''
+        return '' if s.lower() in ['nan', 'none', ''] else s
+    
+    num_raw = v(row, 2)
+    if not num_raw or num_raw == '0':
+        continue
+    try:
+        num = str(int(float(num_raw))).zfill(5)
+    except:
+        num = num_raw.zfill(5)
+    
+    item_id = '${prefix}' + num
+    
+    if '${prefix}' == 'PU':
+        items.append({
+            'id': item_id, 'type': 'pneu', 'vendu': False,
+            'stock_vehicule': v(row,3), 'marque_vehicule': v(row,4),
+            'modele_vehicule': v(row,5), 'annee_vehicule': v(row,6),
+            'marque_pneu': v(row,7), 'modele_pneu': v(row,8),
+            'saison': v(row,9).upper(), 'roues_mags': v(row,10),
+            'grandeur': v(row,11), 'usure': v(row,12),
+            'localisation': v(row,13), 'prix': v(row,14),
+            'notes': v(row,16)
+        })
+    else:
+        items.append({
+            'id': item_id, 'type': 'roue', 'vendu': False,
+            'stock_vehicule': v(row,3), 'marque_vehicule': v(row,4),
+            'modele_vehicule': v(row,5), 'dimension': v(row,6),
+            'roues_mags': v(row,7), 'bolt_pattern': v(row,8),
+            'localisation': v(row,9), 'prix': v(row,10),
+            'notes': v(row,12)
+        })
+
+print(json.dumps(items))
+`;
+    
+    fs.writeFileSync(outFile + '.py', pyScript);
+    
+    const result = await new Promise((resolve, reject) => {
+      exec('python3 ' + outFile + '.py', {maxBuffer: 50*1024*1024}, (err, stdout, stderr) => {
+        if (err) reject(new Error(stderr || err.message));
+        else resolve(stdout);
+      });
+    });
+    
+    const items = JSON.parse(result);
+    
+    // Cleanup temp files
+    try { fs.unlinkSync(tmpFile); fs.unlinkSync(outFile + '.py'); } catch(e) {}
+    
+    res.json({ items: items, count: items.length });
+  } catch (err) {
+    try { fs.unlinkSync(tmpFile); } catch(e) {}
+    console.error('import-excel:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Bulk import
 app.post('/api/pneus-roues/import', async (req, res) => {
   const { items } = req.body;
