@@ -50,6 +50,16 @@ async function initDB() {
           created_at TIMESTAMP DEFAULT NOW()
         )
       `);
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS pneus_roues (
+          id VARCHAR(20) PRIMARY KEY,
+          type VARCHAR(10) NOT NULL,
+          data JSONB DEFAULT '{}',
+          vendu BOOLEAN DEFAULT false,
+          created_at TIMESTAMP DEFAULT NOW(),
+          updated_at TIMESTAMP DEFAULT NOW()
+        )
+      `);
       console.log('DB ready');
       return;
     } catch (err) {
@@ -251,6 +261,79 @@ app.post('/api/notify', async (req, res) => {
     console.error('Graph API error:', err.message);
     res.status(502).json({ error: err.message });
   }
+});
+
+// PNEUS & ROUES
+app.get('/api/pneus-roues', async (req, res) => {
+  try {
+    const { type, vendu } = req.query;
+    let q = 'SELECT * FROM pneus_roues';
+    const params = [];
+    const conditions = [];
+    if (type) { conditions.push('type=$' + (params.length+1)); params.push(type); }
+    if (vendu !== undefined) { conditions.push('vendu=$' + (params.length+1)); params.push(vendu === 'true'); }
+    if (conditions.length) q += ' WHERE ' + conditions.join(' AND ');
+    q += ' ORDER BY id ASC';
+    const result = await pool.query(q, params);
+    res.json(result.rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/pneus-roues', async (req, res) => {
+  const { id, type, data, vendu } = req.body;
+  if (!id || !type) return res.status(400).json({ error: 'id et type requis' });
+  try {
+    const result = await pool.query(
+      `INSERT INTO pneus_roues (id, type, data, vendu)
+       VALUES ($1,$2,$3,$4)
+       ON CONFLICT (id) DO UPDATE SET data=$3, vendu=$4, updated_at=NOW() RETURNING *`,
+      [id, type, JSON.stringify(data||{}), vendu||false]
+    );
+    res.json(result.rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.patch('/api/pneus-roues/:id', async (req, res) => {
+  const { id } = req.params;
+  const { data, vendu } = req.body;
+  try {
+    const fields = [], values = [];
+    let i = 1;
+    if (data !== undefined) { fields.push('data=$'+i++); values.push(JSON.stringify(data)); }
+    if (vendu !== undefined) { fields.push('vendu=$'+i++); values.push(vendu); }
+    fields.push('updated_at=NOW()');
+    values.push(id);
+    const result = await pool.query('UPDATE pneus_roues SET '+fields.join(',')+' WHERE id=$'+i+' RETURNING *', values);
+    if (!result.rows.length) return res.status(404).json({ error: 'Introuvable' });
+    res.json(result.rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/api/pneus-roues/:id', async (req, res) => {
+  try {
+    await pool.query('DELETE FROM pneus_roues WHERE id=$1', [req.params.id]);
+    res.json({ deleted: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Bulk import
+app.post('/api/pneus-roues/import', async (req, res) => {
+  const { items } = req.body;
+  if (!items || !items.length) return res.status(400).json({ error: 'items requis' });
+  try {
+    let count = 0;
+    for (const item of items) {
+      const { id, type, vendu, created_at, ...data } = item;
+      await pool.query(
+        `INSERT INTO pneus_roues (id, type, data, vendu, created_at)
+         VALUES ($1,$2,$3,$4,$5)
+         ON CONFLICT (id) DO NOTHING`,
+        [id, type, JSON.stringify(data), vendu||false, created_at||new Date().toISOString()]
+      );
+      count++;
+    }
+    res.json({ imported: count });
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // GOOGLE DRIVE
