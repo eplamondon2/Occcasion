@@ -279,8 +279,9 @@ header{background:var(--blue);color:white;padding:0 20px;height:56px;display:fle
         <button class="filter-btn" onclick="setFilter('late',this)">En retard</button>
         <button class="filter-btn" onclick="setFilter('done',this)">Complétés</button>
         <button class="filter-btn" onclick="setFilter('docs',this)">Docs manquants</button>
-        <button class="filter-btn" onclick="setFilter('photos',this)">&lt; 10 photos</button>
-        <button class="filter-btn" onclick="setFilter('photos',this)">&lt; 10 photos</button>
+        <button class="filter-btn" onclick="setFilter('fewphotos',this)">&lt; 10 photos</button>
+        <button class="filter-btn" onclick="setFilter('okphotos',this)">&ge; 10 photos</button>
+        
       </div>
       <div style="display:flex;gap:8px;align-items:center">
         <span class="save-ind" id="save-ind"><i class="ti ti-cloud" style="font-size:12px"></i> Chargement…</span>
@@ -546,7 +547,8 @@ function renderAll(){
   else if(currentFilter==='active') list=vehicles.filter(v=>progress(v)<100&&!isLate(v));
   else if(currentFilter==='done') list=vehicles.filter(v=>progress(v)===100);
   else if(currentFilter==='docs') list=vehicles.filter(hasDocIssue);
-  else if(currentFilter==='photos') list=vehicles.filter(v=>v.docs.webScanned&&v.docs.photos!==null&&v.docs.photos<10);
+  else if(currentFilter==='fewphotos') list=vehicles.filter(v=>v.docs.enligne&&v.docs.photos!==null&&v.docs.photos<10);
+  else if(currentFilter==='okphotos') list=vehicles.filter(v=>v.docs.enligne&&v.docs.photos!==null&&v.docs.photos>=10);
   else if(currentFilter==='mine') list=getMyTasks();
   const el = document.getElementById('vlist');
   if(!vehicles.length){
@@ -980,7 +982,7 @@ function updateStats(){
   document.getElementById('s-late').textContent=vehicles.filter(isLate).length;
   const di=vehicles.filter(hasDocIssue).length;
   document.getElementById('s-docs').textContent=di||'–';
-  const pi=vehicles.filter(v=>v.docs.webScanned&&v.docs.photos!==null&&v.docs.photos<10).length;
+  const pi=vehicles.filter(v=>v.docs.enligne&&v.docs.photos!==null&&v.docs.photos<10).length;
   const sel=document.getElementById('s-photos');
   if(sel)sel.textContent=pi||'–';
 }
