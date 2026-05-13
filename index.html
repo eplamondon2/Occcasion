@@ -431,7 +431,7 @@ async function saveVehicle(v){
     await fetch('/api/vehicles/'+v.stock,{
       method:'PATCH',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({sd:v.sd,docs:{carfax:v.docs.carfax,inspection:v.docs.inspection,estimation:v.docs.estimation,driveFolder:v.docs.driveFolder||null,folderId:v.docs.folderId||null,enligne:v.docs.enligne,photos:v.docs.photos,ficheUrl:v.docs.ficheUrl||null},expanded:v.expanded,opts:v.opts})
+      body:JSON.stringify({sd:v.sd,docs:{carfax:v.docs.carfax,inspection:v.docs.inspection,estimation:v.docs.estimation,driveFolder:v.docs.driveFolder||null,folderId:v.docs.folderId||null,enligne:v.docs.enligne,photos:v.docs.photos,ficheUrl:v.docs.ficheUrl||null,webScanned:v.docs.webScanned||false,driveScanned:v.docs.driveScanned||false,lastScan:v.docs.lastScan||null},expanded:v.expanded,opts:v.opts})
     });
     setSaveInd('ok');
   }catch(e){setSaveInd('error');}
@@ -468,7 +468,8 @@ async function loadVehicles(){
               estimation:docs.estimation??null,driveFolder:docs.driveFolder||null,
               folderId:docs.folderId||null,scanning:false,
               enligne:docs.enligne??null,photos:docs.photos??null,
-              ficheUrl:docs.ficheUrl||null,scanningWeb:false}
+              ficheUrl:docs.ficheUrl||null,scanningWeb:false,
+              webScanned:docs.webScanned||false,driveScanned:docs.driveScanned||false,lastScan:docs.lastScan||null}
       };
     });
     if(vehicles.length) nid=Math.max(...vehicles.map(v=>v.id))+1;
@@ -477,6 +478,8 @@ async function loadVehicles(){
   }catch(e){setSaveInd('error');console.error('loadVehicles:',e);}
   renderAll();
   updateMyTasksBanner();
+  // Auto-scan vehicles not scanned today
+  setTimeout(autoScanAll, 2000);
 }
 
 function setSaveInd(state, msg){
@@ -942,6 +945,20 @@ async function sendEmailNotification(toEmail,toName,fromName,vehicle,stepName,co
 
 // Load comments when card is expanded
 const originalToggle = toggle;
+
+async function autoScanAll(){
+  const today = new Date().toDateString();
+  const toScan = vehicles.filter(v => !v.docs.lastScan || new Date(v.docs.lastScan).toDateString() !== today);
+  if(!toScan.length) return;
+  console.log('Auto-scanning', toScan.length, 'vehicles...');
+  for(const v of toScan){
+    await checkDrive(v.id);
+    await checkWeb(v.id);
+    v.docs.lastScan = new Date().toISOString();
+    await saveVehicle(v);
+  }
+  renderAll();
+}
 
 async function scanAll(){
   if(!vehicles.length)return;
