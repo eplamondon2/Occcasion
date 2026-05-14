@@ -1487,38 +1487,126 @@ async function importExcel(input){
   const file = input.files[0];
   if(!file) return;
   
-  // Detect prefix from filename
   const fname = file.name.toUpperCase();
   const prefix = fname.includes('PNEU') ? 'PU' : fname.includes('ROUE') ? 'RU' : null;
   if(!prefix){
-    showNotif('<i class="ti ti-alert-triangle"></i> Impossible de détecter le type — utilisez un fichier PNEUS ou ROUES','warn');
+    showNotif('<i class="ti ti-alert-triangle"></i> Impossible de détecter le type — nommez le fichier PNEUS ou ROUES','warn');
     return;
   }
   
-  showNotif('<div class="spin"></div> Lecture du fichier Excel (détection couleurs)…','info',0);
+  showNotif('<div class="spin"></div> Lecture du fichier Excel…','info',0);
   try{
-    // Convert to base64 and send to server for color-aware parsing
+    // Read XLSX as ZIP to get raw XML with cell colors
+    const JSZip = (await import('https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js')).default;
     const buffer = await file.arrayBuffer();
-    const bytes = new Uint8Array(buffer);
-    let binary = '';
-    for(let i=0;i<bytes.byteLength;i++) binary += String.fromCharCode(bytes[i]);
-    const base64 = btoa(binary);
+    const zip = await JSZip.loadAsync(buffer);
     
-    const r = await fetch('/api/import-excel', {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({fileData:base64, prefix:prefix})
-    });
-    const d = await r.json();
-    if(!d.items || d.items.length === 0){ showNotif('Aucun item disponible trouvé (lignes rouges exclues)','warn'); return; }
+    // Get styles to find red fill index
+    const stylesXml = await zip.file('xl/styles.xml').async('string');
+    const parser = new DOMParser();
+    const stylesDoc = parser.parseFromString(stylesXml, 'text/xml');
     
-    showNotif('<div class="spin"></div> Import de '+d.count+' items disponibles…','info',0);
-    
-    // Format items for bulk import
-    const items = d.items.map(function(item){
-      const {id, type, vendu, ...data} = item;
-      return {id:id, type:type, vendu:vendu||false, data:data};
+    // Find fill indices that are red (FF0000 or FFFF0000)
+    const fills = stylesDoc.querySelectorAll('fills fill fgColor');
+    const redFillIndices = new Set();
+    fills.forEach(function(fg, i){
+      const rgb = fg.getAttribute('rgb') || '';
+      if(rgb.toUpperCase().endsWith('FF0000')) redFillIndices.add(i);
     });
     
+    // Get xf (cell format) table - maps xfId to fillId
+    const xfs = stylesDoc.querySelectorAll('cellXfs xf');
+    const redXfIndices = new Set();
+    xfs.forEach(function(xf, i){
+      const fillId = parseInt(xf.getAttribute('fillId')||'0');
+      if(redFillIndices.has(fillId)) redXfIndices.add(i);
+    });
+    
+    // Parse sheet data
+    const sheetXml = await zip.file('xl/worksheets/sheet1.xml').async('string');
+    const sheetDoc = parser.parseFromString(sheetXml, 'text/xml');
+    
+    // Get shared strings
+    let sharedStrings = [];
+    const ssFile = zip.file('xl/sharedStrings.xml');
+    if(ssFile){
+      const ssXml = await ssFile.async('string');
+      const ssDoc = parser.parseFromString(ssXml, 'text/xml');
+      ssDoc.querySelectorAll('si').forEach(function(si){
+        sharedStrings.push(si.textContent || '');
+      });
+    }
+    
+    function getCellValue(cell){
+      const t = cell.getAttribute('t');
+      const v = cell.querySelector('v');
+      if(!v) return '';
+      if(t === 's') return sharedStrings[parseInt(v.textContent)] || '';
+      return v.textContent || '';
+    }
+    
+    function colToIdx(col){
+      let idx = 0;
+      for(let i=0;i<col.length;i++) idx = idx*26 + col.charCodeAt(i) - 64;
+      return idx - 1;
+    }
+    
+    const rows = sheetDoc.querySelectorAll('sheetData row');
+    const items = [];
+    
+    rows.forEach(function(row){
+      const cells = {};
+      row.querySelectorAll('c').forEach(function(cell){
+        const ref = cell.getAttribute('r') || '';
+        const col = ref.replace(/[0-9]/g,'');
+        const idx = colToIdx(col);
+        cells[idx] = getCellValue(cell);
+        // Check if cell is red
+        if(idx === 0){
+          const s = parseInt(cell.getAttribute('s')||'-1');
+          if(redXfIndices.has(s)) cells._isRed = true;
+        }
+      });
+      
+      if(cells._isRed) return; // Skip red rows
+      
+      const pfx = (cells[1]||'').trim();
+      if(pfx !== prefix) return;
+      
+      const numRaw = (cells[2]||'').trim();
+      if(!numRaw) return;
+      let num;
+      try{ num = String(parseInt(parseFloat(numRaw))).padStart(5,'0'); }
+      catch(e){ num = numRaw.padStart(5,'0'); }
+      
+      const sv = function(v){ const s=String(v||'').trim(); return ['nan','none','undefined'].includes(s.toLowerCase())?'':s; };
+      const id = prefix + num;
+      
+      if(prefix === 'PU'){
+        items.push({id:id, type:'pneu', vendu:false, data:{
+          stock_vehicule:sv(cells[3]), marque_vehicule:sv(cells[4]),
+          modele_vehicule:sv(cells[5]), annee_vehicule:sv(cells[6]),
+          marque_pneu:sv(cells[7]), modele_pneu:sv(cells[8]),
+          saison:(sv(cells[9])||'').toUpperCase(), roues_mags:sv(cells[10]),
+          grandeur:sv(cells[11]), usure:sv(cells[12]),
+          localisation:sv(cells[13]), prix:sv(cells[14]), notes:sv(cells[16])
+        }});
+      } else {
+        items.push({id:id, type:'roue', vendu:false, data:{
+          stock_vehicule:sv(cells[3]), marque_vehicule:sv(cells[4]),
+          modele_vehicule:sv(cells[5]), dimension:sv(cells[6]),
+          roues_mags:sv(cells[7]), bolt_pattern:sv(cells[8]),
+          localisation:sv(cells[9]), prix:sv(cells[10]), notes:sv(cells[12])
+        }});
+      }
+    });
+    
+    if(items.length === 0){
+      showNotif('<i class="ti ti-alert-triangle"></i> Aucun item disponible trouvé','warn');
+      return;
+    }
+    
+    showNotif('<div class="spin"></div> Import de '+items.length+' items…','info',0);
     const r2 = await fetch('/api/pneus-roues/import', {method:'POST', headers:{'Content-Type':'application/json'},
       body:JSON.stringify({items:items})});
     const d2 = await r2.json();
@@ -1528,7 +1616,7 @@ async function importExcel(input){
     input.value='';
   }catch(e){
     clearNotif();
-    showNotif('<i class="ti ti-alert-triangle"></i> Erreur import: '+e.message,'warn');
+    showNotif('<i class="ti ti-alert-triangle"></i> Erreur: '+e.message,'warn');
     console.error('importExcel:', e);
   }
 }
