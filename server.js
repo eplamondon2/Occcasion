@@ -425,79 +425,80 @@ app.delete('/api/pneus-roues/:id', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// Import Excel with color detection (server-side)
+// Import Excel with server-side XLSX parsing
 app.post('/api/import-excel', async (req, res) => {
   const { fileData, prefix } = req.body;
   if (!fileData || !prefix) return res.status(400).json({ error: 'fileData et prefix requis' });
-  
-  const { exec } = require('child_process');
-  const fs = require('fs');
-  const path = require('path');
-  
-  // Write base64 to temp file
-  const tmpFile = '/tmp/import_' + Date.now() + '.xlsx';
-  const outFile = tmpFile + '.json';
-  
   try {
-    fs.writeFileSync(tmpFile, Buffer.from(fileData, 'base64'));
+    const XLSX = require('xlsx');
+    const buffer = Buffer.from(fileData, 'base64');
+    const wb = XLSX.read(buffer, { type: 'buffer', cellStyles: true });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: false });
     
-    // Python script to parse Excel with color detection
-    const pyScript = [
-      'import sys, json, openpyxl',
-      'wb = openpyxl.load_workbook("' + tmpFile + '")',
-      'ws = wb.active',
-      'prefix = "' + prefix + '"',
-      'items = []',
-      'def v(row, i):',
-      '    val = row[i].value if i < len(row) else None',
-      '    s = str(val).strip() if val is not None else ""',
-      '    return "" if s.lower() in ["nan", "none", ""] else s',
-      'for row in ws.iter_rows():',
-      '    if str(row[1].value).strip() != prefix: continue',
-      '    is_red = False',
-      '    for cell in row[:18]:',
-      '        try:',
-      '            fill = cell.fill',
-      '            if fill and fill.fgColor and fill.fgColor.type == "rgb":',
-      '                rgb = fill.fgColor.rgb or ""',
-      '                if rgb.upper() == "FFFF0000": is_red = True; break',
-      '        except: pass',
-      '    if is_red: continue',
-      '    num_raw = v(row, 2)',
-      '    if not num_raw or num_raw == "0": continue',
-      '    try: num = str(int(float(num_raw))).zfill(5)',
-      '    except: num = num_raw.zfill(5)',
-      '    item_id = prefix + num',
-      '    if prefix == "PU":',
-      '        items.append({"id":item_id,"type":"pneu","vendu":False,"stock_vehicule":v(row,3),"marque_vehicule":v(row,4),"modele_vehicule":v(row,5),"annee_vehicule":v(row,6),"marque_pneu":v(row,7),"modele_pneu":v(row,8),"saison":v(row,9).upper(),"roues_mags":v(row,10),"grandeur":v(row,11),"usure":v(row,12),"localisation":v(row,13),"prix":v(row,14),"notes":v(row,16)})',
-      '    else:',
-      '        items.append({"id":item_id,"type":"roue","vendu":False,"stock_vehicule":v(row,3),"marque_vehicule":v(row,4),"modele_vehicule":v(row,5),"dimension":v(row,6),"roues_mags":v(row,7),"bolt_pattern":v(row,8),"localisation":v(row,9),"prix":v(row,10),"notes":v(row,12)})',
-      'print(json.dumps(items))'
-    ].join('\n');
+    // Get cell styles to detect red cells
+    const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
     
-    fs.writeFileSync(outFile + '.py', pyScript);
+    function isRowRed(rowIdx) {
+      // Check first few cells of row for red background
+      for (let c = 0; c <= 5; c++) {
+        const addr = XLSX.utils.encode_cell({ r: rowIdx, c: c });
+        const cell = ws[addr];
+        if (cell && cell.s && cell.s.fgColor) {
+          const rgb = cell.s.fgColor.rgb || '';
+          if (rgb.toUpperCase() === 'FFFF0000' || rgb.toUpperCase() === 'FF0000') return true;
+        }
+        if (cell && cell.s && cell.s.font && cell.s.font.color) {
+          const rgb = cell.s.font.color.rgb || '';
+          if (rgb.toUpperCase() === 'FFFF0000' || rgb.toUpperCase() === 'FF0000') return true;
+        }
+      }
+      return false;
+    }
     
-    const result = await new Promise((resolve, reject) => {
-      exec('python3 ' + outFile + '.py', {maxBuffer: 50*1024*1024}, (err, stdout, stderr) => {
-        if (err) reject(new Error(stderr || err.message));
-        else resolve(stdout);
-      });
-    });
+    const sv = (v) => String(v || '').trim().replace(/^(nan|none|undefined)$/i, '');
+    const items = [];
     
-    const items = JSON.parse(result);
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const pfx = sv(row[1]);
+      if (pfx !== prefix) continue;
+      if (isRowRed(i)) continue;
+      
+      const numRaw = sv(row[2]);
+      if (!numRaw) continue;
+      let num;
+      try { num = String(parseInt(parseFloat(numRaw))).padStart(5, '0'); }
+      catch (e) { num = numRaw.padStart(5, '0'); }
+      
+      const id = prefix + num;
+      if (prefix === 'PU') {
+        items.push({ id, type: 'pneu', vendu: false, data: {
+          stock_vehicule: sv(row[3]), marque_vehicule: sv(row[4]),
+          modele_vehicule: sv(row[5]), annee_vehicule: sv(row[6]),
+          marque_pneu: sv(row[7]), modele_pneu: sv(row[8]),
+          saison: (sv(row[9]) || '').toUpperCase(), roues_mags: sv(row[10]),
+          grandeur: sv(row[11]), usure: sv(row[12]),
+          localisation: sv(row[13]), prix: sv(row[14]), notes: sv(row[16])
+        }});
+      } else {
+        items.push({ id, type: 'roue', vendu: false, data: {
+          stock_vehicule: sv(row[3]), marque_vehicule: sv(row[4]),
+          modele_vehicule: sv(row[5]), dimension: sv(row[6]),
+          roues_mags: sv(row[7]), bolt_pattern: sv(row[8]),
+          localisation: sv(row[9]), prix: sv(row[10]), notes: sv(row[12])
+        }});
+      }
+    }
     
-    // Cleanup temp files
-    try { fs.unlinkSync(tmpFile); fs.unlinkSync(outFile + '.py'); } catch(e) {}
-    
-    res.json({ items: items, count: items.length });
+    res.json({ items, count: items.length });
   } catch (err) {
-    try { fs.unlinkSync(tmpFile); } catch(e) {}
-    console.error('import-excel ERROR:', err.message);
-    res.status(500).json({ error: err.message, detail: err.stack });
+    console.error('import-excel:', err.message);
+    res.status(500).json({ error: err.message });
   }
 });
 
-// Bulk import
+// Bulk import// Bulk import
 app.post('/api/pneus-roues/import', async (req, res) => {
   const { items } = req.body;
   if (!items || !items.length) return res.status(400).json({ error: 'items requis' });
