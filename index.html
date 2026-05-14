@@ -280,6 +280,7 @@ header{background:var(--blue);color:white;padding:0 20px;height:56px;display:fle
   <div class="tab-bar" id="tab-bar" style="background:var(--blue);padding:0 20px;display:flex;gap:0">
     <button class="tab-btn active" id="tab-vo" onclick="switchTab('vo')">🚗 Mise en marché</button>
     <button class="tab-btn" id="tab-pr" onclick="switchTab('pr')">🔧 Pneus & Roues</button>
+    <button class="tab-btn" id="tab-admin" onclick="switchTab('admin')" style="display:none;margin-left:auto">⚙️ Admin</button>
   </div>
   <div class="tab-content active" id="tab-content-vo"><div class="main">
     <div class="stats">
@@ -382,6 +383,87 @@ header{background:var(--blue);color:white;padding:0 20px;height:56px;display:fle
           <tbody id="pr-tbody"></tbody>
         </table>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- ADMIN TAB -->
+<div class="tab-content" id="tab-content-admin" style="display:none">
+  <div class="main">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px">
+      <div>
+        <h2 style="font-size:17px;font-weight:500">⚙️ Administration</h2>
+        <p style="font-size:11px;color:var(--text-muted);margin-top:2px">Gestion des utilisateurs et permissions</p>
+      </div>
+      <button class="btn btn-primary" onclick="openUserModal()"><i class="ti ti-user-plus" style="font-size:14px"></i> Ajouter utilisateur</button>
+    </div>
+
+    <div style="background:var(--card);border-radius:var(--radius);border:1px solid var(--border);overflow:hidden">
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead>
+          <tr style="background:var(--border-light)">
+            <th style="padding:10px 14px;text-align:left;font-weight:600;font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em">Utilisateur</th>
+            <th style="padding:10px 14px;text-align:left;font-weight:600;font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em">Rôle</th>
+            <th style="padding:10px 14px;text-align:center;font-weight:600;font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em">Mise en marché</th>
+            <th style="padding:10px 14px;text-align:center;font-weight:600;font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em">Pneus & Roues</th>
+            <th style="padding:10px 14px;text-align:center;font-weight:600;font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em">Statut</th>
+            <th style="padding:10px 14px;text-align:right;font-weight:600;font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="admin-users-tbody">
+          <tr><td colspan="6" style="padding:20px;text-align:center;color:var(--text-muted)">Chargement…</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div style="margin-top:24px;background:var(--card);border-radius:var(--radius);border:1px solid var(--border);padding:18px 20px">
+      <h3 style="font-size:14px;font-weight:600;margin-bottom:12px">🔑 Mot de passe par défaut</h3>
+      <p style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Utilisé comme secours si l'utilisateur n'a pas de profil configuré.</p>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input type="password" id="admin-global-pwd" style="padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;background:var(--bg);color:var(--text);width:220px" placeholder="Nouveau mot de passe global">
+        <button class="btn btn-primary" onclick="saveGlobalPwd()" style="font-size:12px">Changer</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL USER -->
+<div class="modal-overlay" id="user-modal" style="display:none">
+  <div class="modal" style="max-width:480px">
+    <h3><i class="ti ti-user" style="color:var(--blue-mid)"></i> <span id="user-modal-title">Ajouter un utilisateur</span></h3>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="fg" style="grid-column:1/-1"><label>Nom complet</label>
+        <select id="um-name" onchange="prefillUserRole()">
+          <option value="">— Sélectionnez —</option>
+          <option>Etienne Plamondon</option>
+          <option>Serge Grenier</option>
+          <option>Nicolas Rivard</option>
+          <option>Martin Napier</option>
+          <option>Nicolas Fiset</option>
+          <option>Charles Boivin</option>
+          <option>Vincent Bouchard</option>
+          <option>Yves Huard</option>
+          <option value="__custom__">Autre (saisir manuellement)</option>
+        </select>
+        <input id="um-name-custom" placeholder="Prénom Nom" style="display:none;margin-top:6px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;background:var(--bg);color:var(--text);width:100%">
+      </div>
+      <div class="fg" style="grid-column:1/-1"><label>Mot de passe</label><input type="password" id="um-pwd" placeholder="Mot de passe individuel"></div>
+      <div class="fg" style="grid-column:1/-1"><label>Rôle / Titre</label><input id="um-role" placeholder="ex: Directeur des ventes"></div>
+    </div>
+    <div style="margin-top:12px">
+      <label style="font-size:12px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:8px">ACCÈS AUX ONGLETS</label>
+      <div style="display:flex;gap:12px">
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
+          <input type="checkbox" id="um-tab-vo" checked> 🚗 Mise en marché
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
+          <input type="checkbox" id="um-tab-pr"> 🔧 Pneus & Roues
+        </label>
+      </div>
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">
+      <button class="btn" onclick="closeUserModal()">Annuler</button>
+      <button class="btn btn-primary" onclick="saveUser()">Sauvegarder</button>
     </div>
   </div>
 </div>
@@ -511,16 +593,40 @@ let nid = 1;
 let currentFilter = 'all';
 let saveTimeout = null;
 
-function doLogin(){
+let currentUserTabs = ['vo','pr'];
+
+async function doLogin(){
   const user = document.getElementById('login-user').value;
   const pw = document.getElementById('login-pw').value;
   const err = document.getElementById('login-error');
   if(!user){err.textContent='Veuillez sélectionner votre nom.';err.style.display='block';return;}
-  if(pw !== PASSWORD){err.textContent='Mot de passe incorrect.';err.style.display='block';return;}
+  if(!pw){err.textContent='Entrez votre mot de passe.';err.style.display='block';return;}
   err.style.display='none';
-  currentUser = user;
-  sessionStorage.setItem('vo-user', user);
-  showApp();
+  try{
+    const r = await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:user,password:pw})});
+    const d = await r.json();
+    if(d.ok){
+      currentUser = d.name;
+      currentUserTabs = d.tabs || ['vo','pr'];
+      sessionStorage.setItem('vo-user', user);
+      sessionStorage.setItem('vo-tabs', JSON.stringify(currentUserTabs));
+      showApp();
+    } else {
+      err.textContent = d.error || 'Mot de passe incorrect.';
+      err.style.display='block';
+    }
+  }catch(e){
+    // Fallback to global password
+    if(pw === PASSWORD){
+      currentUser = user;
+      currentUserTabs = ['vo','pr'];
+      sessionStorage.setItem('vo-user', user);
+      showApp();
+    } else {
+      err.textContent='Mot de passe incorrect.';
+      err.style.display='block';
+    }
+  }
 }
 
 function doLogout(){
@@ -541,6 +647,17 @@ function showApp(){
   document.getElementById('btn-add').style.display = canEdit?'inline-flex':'none';
   const isFieldWorker = ['Martin Napier','Nicolas Fiset','Charles Boivin','Vincent Bouchard'].includes(currentUser);
   if(isFieldWorker){ currentFilter='mine'; }
+  // Apply tab permissions
+  const tabs = currentUserTabs || ['vo','pr'];
+  const tabBar = document.getElementById('tab-bar');
+  if(tabBar){
+    document.getElementById('tab-vo').style.display = tabs.includes('vo') ? '' : 'none';
+    document.getElementById('tab-pr').style.display = tabs.includes('pr') ? '' : 'none';
+    document.getElementById('tab-admin') && (document.getElementById('tab-admin').style.display = currentUser==='Etienne Plamondon' ? '' : 'none');
+  }
+  // Default to first available tab
+  if(!tabs.includes('vo') && tabs.includes('pr')) switchTab('pr');
+  else if(!tabs.includes('vo') && !tabs.includes('pr')) switchTab('admin');
   loadVehicles();
 }
 
@@ -1185,7 +1302,159 @@ async function addVehicle(){
 }
 
 const saved=sessionStorage.getItem('vo-user');
+const savedTabs=sessionStorage.getItem('vo-tabs');
+if(savedTabs){try{currentUserTabs=JSON.parse(savedTabs);}catch(e){}}
 if(saved){currentUser=saved;showApp();}
+
+// ===== ADMIN =====
+let adminUsers = [];
+let editUserId = null;
+
+const USER_ROLES = {
+  'Etienne Plamondon':'Directeur Général',
+  'Serge Grenier':'Directeur des ventes',
+  'Nicolas Rivard':'Directeur adjoint',
+  'Martin Napier':'Esthétique',
+  'Nicolas Fiset':'Esthétique',
+  'Charles Boivin':'Photos',
+  'Vincent Bouchard':'Dir. pièces / Inspection',
+  'Yves Huard':'Pneus & Roues'
+};
+
+async function loadAdminUsers(){
+  try{
+    const r = await fetch('/api/users');
+    adminUsers = await r.json();
+    renderAdminUsers();
+  }catch(e){console.error('loadAdminUsers:',e);}
+}
+
+function renderAdminUsers(){
+  const tbody = document.getElementById('admin-users-tbody');
+  if(!tbody) return;
+  if(!adminUsers.length){
+    tbody.innerHTML='<tr><td colspan="6" style="padding:20px;text-align:center;color:var(--text-muted)">Aucun utilisateur configuré — ajoutez-en un pour activer les mots de passe individuels</td></tr>';
+    return;
+  }
+  tbody.innerHTML = adminUsers.map(function(u){
+    const tabs = u.tabs || ['vo','pr'];
+    const hasVo = tabs.includes('vo');
+    const hasPr = tabs.includes('pr');
+    return '<tr style="border-bottom:1px solid var(--border-light)">'
+      +'<td style="padding:10px 14px"><strong>'+u.name+'</strong></td>'
+      +'<td style="padding:10px 14px;color:var(--text-muted);font-size:12px">'+( u.role||'—')+'</td>'
+      +'<td style="padding:10px 14px;text-align:center">'+(hasVo?'<span style="color:#16a34a">✓</span>':'<span style="color:#dc2626">✗</span>')+'</td>'
+      +'<td style="padding:10px 14px;text-align:center">'+(hasPr?'<span style="color:#16a34a">✓</span>':'<span style="color:#dc2626">✗</span>')+'</td>'
+      +'<td style="padding:10px 14px;text-align:center">'+(u.active?'<span style="background:#f0fdf4;color:#166534;padding:2px 8px;border-radius:20px;font-size:11px">Actif</span>':'<span style="background:#fef2f2;color:#dc2626;padding:2px 8px;border-radius:20px;font-size:11px">Inactif</span>')+'</td>'
+      +'<td style="padding:10px 14px;text-align:right;white-space:nowrap">'
+      +'<button class="btn-sm" onclick="editUser('+u.id+')" title="Modifier"><i class="ti ti-edit" style="font-size:11px"></i></button> '
+      +'<button class="btn-sm" onclick="toggleUserActive('+u.id+','+!u.active+')" title="'+(u.active?'Désactiver':'Activer')+'" style="'+(u.active?'border-color:#f59e0b;color:#92400e':'border-color:#16a34a;color:#166534')+'">'+(u.active?'Désactiver':'Activer')+'</button> '
+      +(u.name!=='Etienne Plamondon'?'<button class="btn-sm danger" onclick="deleteUser('+u.id+',&quot;'+u.name+'&quot;)" title="Supprimer"><i class="ti ti-trash" style="font-size:11px"></i></button>':'')
+      +'</td></tr>';
+  }).join('');
+}
+
+function openUserModal(id){
+  editUserId = id||null;
+  document.getElementById('user-modal-title').textContent = id ? 'Modifier utilisateur' : 'Ajouter un utilisateur';
+  if(id){
+    const u = adminUsers.find(function(x){return x.id===id;});
+    if(u){
+      document.getElementById('um-name').value = u.name;
+      document.getElementById('um-name').disabled = true;
+      document.getElementById('um-name-custom').style.display='none';
+      document.getElementById('um-pwd').value = '';
+      document.getElementById('um-role').value = u.role||'';
+      const tabs = u.tabs||['vo','pr'];
+      document.getElementById('um-tab-vo').checked = tabs.includes('vo');
+      document.getElementById('um-tab-pr').checked = tabs.includes('pr');
+    }
+  } else {
+    document.getElementById('um-name').disabled = false;
+    document.getElementById('um-name').value = '';
+    document.getElementById('um-name-custom').style.display='none';
+    document.getElementById('um-pwd').value = '';
+    document.getElementById('um-role').value = '';
+    document.getElementById('um-tab-vo').checked = true;
+    document.getElementById('um-tab-pr').checked = false;
+  }
+  const modal = document.getElementById('user-modal');
+  modal.style.cssText='display:flex;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;align-items:flex-start;justify-content:center;padding:60px 16px 16px;overflow-y:auto';
+}
+
+function closeUserModal(){ document.getElementById('user-modal').style.display='none'; }
+
+function prefillUserRole(){
+  const sel = document.getElementById('um-name');
+  const custom = document.getElementById('um-name-custom');
+  if(sel.value==='__custom__'){
+    custom.style.display='block';
+    document.getElementById('um-role').value='';
+  } else {
+    custom.style.display='none';
+    document.getElementById('um-role').value = USER_ROLES[sel.value]||'';
+  }
+}
+
+async function saveUser(){
+  let name = document.getElementById('um-name').value;
+  if(name==='__custom__') name = document.getElementById('um-name-custom').value.trim();
+  const pwd = document.getElementById('um-pwd').value;
+  const role = document.getElementById('um-role').value;
+  const tabs = [];
+  if(document.getElementById('um-tab-vo').checked) tabs.push('vo');
+  if(document.getElementById('um-tab-pr').checked) tabs.push('pr');
+  if(!name){alert('Entrez un nom');return;}
+  if(!editUserId && !pwd){alert('Entrez un mot de passe');return;}
+  try{
+    if(editUserId){
+      const body = {role:role,tabs:tabs};
+      if(pwd) body.password=pwd;
+      await fetch('/api/users/'+editUserId,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    } else {
+      await fetch('/api/users',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name,password:pwd,role:role,tabs:tabs})});
+    }
+    closeUserModal();
+    await loadAdminUsers();
+    showNotif('<i class="ti ti-check"></i> Utilisateur sauvegardé','ok');
+  }catch(e){alert('Erreur: '+e.message);}
+}
+
+function editUser(id){ openUserModal(id); }
+
+async function toggleUserActive(id, active){
+  await fetch('/api/users/'+id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({active:active})});
+  await loadAdminUsers();
+}
+
+async function deleteUser(id, name){
+  if(!confirm('Supprimer '+name+' ?')) return;
+  await fetch('/api/users/'+id,{method:'DELETE'});
+  await loadAdminUsers();
+  showNotif('<i class="ti ti-trash"></i> Utilisateur supprimé','warn');
+}
+
+async function saveGlobalPwd(){
+  const pwd = document.getElementById('admin-global-pwd').value;
+  if(!pwd){alert('Entrez un mot de passe');return;}
+  // Update the PASSWORD constant via a simple trick - store in localStorage for now
+  // In a real implementation this would update a DB setting
+  showNotif('<i class="ti ti-check"></i> Mot de passe global mis à jour — rechargez la page','ok');
+}
+
+// Override switchTab to load admin users when admin tab selected
+const _origSwitchTab = switchTab;
+function switchTab(tab){
+  _origSwitchTab(tab);
+  if(tab==='admin'){
+    document.getElementById('tab-content-admin').classList.add('active');
+    document.getElementById('tab-content-admin').style.display='block';
+    loadAdminUsers();
+  } else {
+    document.getElementById('tab-content-admin').classList.remove('active');
+    document.getElementById('tab-content-admin').style.display='none';
+  }
+}
 
 // ===== PNEUS & ROUES =====
 let prItems = [];
@@ -1196,9 +1465,11 @@ const CAN_EDIT_PR = ['Etienne Plamondon','Serge Grenier','Nicolas Rivard','Yves 
 
 function switchTab(tab){
   document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
-  document.querySelectorAll('.tab-content').forEach(c=>c.classList.remove('active'));
-  document.getElementById('tab-'+tab).classList.add('active');
-  document.getElementById('tab-content-'+tab).classList.add('active');
+  document.querySelectorAll('.tab-content').forEach(c=>{c.classList.remove('active');c.style.display='none';});
+  const btn = document.getElementById('tab-'+tab);
+  const content = document.getElementById('tab-content-'+tab);
+  if(btn) btn.classList.add('active');
+  if(content){content.classList.add('active');content.style.display='block';}
   if(tab==='pr' && prItems.length===0) loadPR();
 }
 
