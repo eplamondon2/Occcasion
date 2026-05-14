@@ -1767,10 +1767,17 @@ async function importExcel(input){
   
   showNotif('<div class="spin"></div> Lecture du fichier Excel…','info',0);
   try{
-    // Read XLSX as ZIP to get raw XML with cell colors
-    const JSZip = (await import('https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js')).default;
+    // Load JSZip from CDN using script tag approach
+    await new Promise(function(resolve, reject){
+      if(window.JSZip){resolve();return;}
+      const s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js';
+      s.onload = resolve;
+      s.onerror = reject;
+      document.head.appendChild(s);
+    });
     const buffer = await file.arrayBuffer();
-    const zip = await JSZip.loadAsync(buffer);
+    const zip = await window.JSZip.loadAsync(buffer);
     
     // Get styles to find red fill index
     const stylesXml = await zip.file('xl/styles.xml').async('string');
