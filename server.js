@@ -71,6 +71,14 @@ async function initDB() {
           updated_at TIMESTAMP DEFAULT NOW()
         )
       `);
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS app_settings (
+          key VARCHAR(100) PRIMARY KEY,
+          value TEXT
+        )
+      `);
+      // Insert default global password if not exists
+      await pool.query(`INSERT INTO app_settings (key,value) VALUES ('global_password','hyundai2025') ON CONFLICT (key) DO NOTHING`);
       console.log('DB ready');
       return;
     } catch (err) {
@@ -164,10 +172,17 @@ app.post('/api/login', async (req, res) => {
         return res.status(401).json({ error: 'Mot de passe incorrect' });
       }
     }
-    // Fallback: check global password for legacy users
-    const globalPwd = await pool.query("SELECT value FROM app_settings WHERE key='global_password'");
-    if (globalPwd.rows.length > 0 && globalPwd.rows[0].value === password) {
-      return res.json({ ok: true, name: name, role: null, tabs: ['vo','pr'] });
+    // Fallback: check global password
+    try {
+      const globalPwd = await pool.query("SELECT value FROM app_settings WHERE key='global_password'");
+      if (globalPwd.rows.length > 0 && globalPwd.rows[0].value === password) {
+        return res.json({ ok: true, name: name, role: null, tabs: ['vo','pr'] });
+      }
+    } catch(e2) {
+      // app_settings table might not exist yet, use hardcoded fallback
+      if (password === 'hyundai2025') {
+        return res.json({ ok: true, name: name, role: null, tabs: ['vo','pr'] });
+      }
     }
     return res.status(401).json({ error: 'Accès refusé' });
   } catch (err) { res.status(500).json({ error: err.message }); }
