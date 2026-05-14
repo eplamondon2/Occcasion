@@ -106,31 +106,6 @@ app.get('/api/test-inventory', async (req, res) => {
   }
 });
 
-// ONE-TIME SEED ENDPOINT - remove after use
-app.get('/api/seed-inventaire', async (req, res) => {
-  const secret = req.query.secret;
-  if(secret !== 'hyundai2025seed') return res.status(403).json({error:'Unauthorized'});
-  try {
-    // Clear existing
-    await pool.query('DELETE FROM pneus_roues');
-    
-    // Import data will be loaded from embedded JSON
-    const XLSX = require('xlsx');
-    res.json({message: 'Use POST /api/seed-inventaire with items array'});
-  } catch(err) {
-    res.status(500).json({error: err.message});
-  }
-});
-
-// TEST PYTHON
-app.get('/api/test-python', async (req, res) => {
-  const { exec } = require('child_process');
-  exec('python3 -c "import openpyxl; print(openpyxl.__version__)"', (err, stdout, stderr) => {
-    res.json({ ok: !err, stdout: stdout.trim(), stderr: stderr.trim(), error: err?.message });
-  });
-});
-
-
 // SEED INVENTAIRE
 app.get('/api/seed-inventaire', async (req, res) => {
   const secret = req.query.secret;
