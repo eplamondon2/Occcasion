@@ -1767,22 +1767,66 @@ async function importExcel(input){
   
   showNotif('<div class="spin"></div> Lecture du fichier Excel…','info',0);
   try{
-    // Load JSZip from CDN using script tag approach
-    await new Promise(function(resolve, reject){
-      if(window.JSZip){resolve();return;}
-      const s = document.createElement('script');
-      s.src = 'https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js';
-      s.onload = resolve;
-      s.onerror = reject;
-      document.head.appendChild(s);
-    });
     const buffer = await file.arrayBuffer();
-    const zip = await window.JSZip.loadAsync(buffer);
+    // Use DecompressionStream to unzip XLSX (native browser API)
+    // XLSX is a ZIP file - read it as ZIP using native APIs
+    const uint8 = new Uint8Array(buffer);
+    // Find file entries in ZIP
+    async function readZipEntries(data){
+      const view = new DataView(data.buffer || data);
+      const entries = {};
+      let i = 0;
+      while(i < data.length - 4){
+        // Local file header signature
+        if(data[i]===0x50 && data[i+1]===0x4B && data[i+2]===0x03 && data[i+3]===0x04){
+          const compression = view.getUint16(i+8, true);
+          const compSize = view.getUint32(i+18, true);
+          const uncompSize = view.getUint32(i+22, true);
+          const fnLen = view.getUint16(i+26, true);
+          const extraLen = view.getUint16(i+28, true);
+          const fname = new TextDecoder().decode(data.slice(i+30, i+30+fnLen));
+          const dataStart = i+30+fnLen+extraLen;
+          const compData = data.slice(dataStart, dataStart+compSize);
+          if(compression === 0){
+            entries[fname] = compData;
+          } else if(compression === 8){
+            try{
+              const ds = new DecompressionStream('deflate-raw');
+              const writer = ds.writable.getWriter();
+              const reader = ds.readable.getReader();
+              writer.write(compData);
+              writer.close();
+              const chunks = [];
+              let done = false;
+              while(!done){
+                const {value, done:d} = await reader.read();
+                if(d){done=true;}else{chunks.push(value);}
+              }
+              const result = new Uint8Array(uncompSize);
+              let offset = 0;
+              for(const chunk of chunks){result.set(chunk,offset);offset+=chunk.length;}
+              entries[fname] = result;
+            }catch(e){entries[fname]=compData;}
+          }
+          i = dataStart + compSize;
+        } else { i++; }
+      }
+      return entries;
+    }
     
-    // Get styles to find red fill index
-    const stylesXml = await zip.file('xl/styles.xml').async('string');
+    const entries = await readZipEntries(uint8);
+    const decode = (u8) => new TextDecoder().decode(u8);
     const parser = new DOMParser();
-    const stylesDoc = parser.parseFromString(stylesXml, 'text/xml');
+    
+    const stylesXml = decode(entries['xl/styles.xml']);
+    const sheetXml = decode(entries['xl/worksheets/sheet1.xml']);
+    const ssXml = entries['xl/sharedStrings.xml'] ? decode(entries['xl/sharedStrings.xml']) : '<sst></sst>';
+    
+    const stylesDoc = parser.parseFromString(stylesXml,'text/xml');
+    const sheetDoc = parser.parseFromString(sheetXml,'text/xml');
+    const ssDoc = parser.parseFromString(ssXml,'text/xml');
+    
+    // Styles already parsed above
     
     // Find fill indices that are red (FF0000 or FFFF0000)
     const fills = stylesDoc.querySelectorAll('fills fill fgColor');
@@ -1800,20 +1844,11 @@ async function importExcel(input){
       if(redFillIndices.has(fillId)) redXfIndices.add(i);
     });
     
-    // Parse sheet data
-    const sheetXml = await zip.file('xl/worksheets/sheet1.xml').async('string');
-    const sheetDoc = parser.parseFromString(sheetXml, 'text/xml');
-    
-    // Get shared strings
+    // Sheet and shared strings already parsed above
     let sharedStrings = [];
-    const ssFile = zip.file('xl/sharedStrings.xml');
-    if(ssFile){
-      const ssXml = await ssFile.async('string');
-      const ssDoc = parser.parseFromString(ssXml, 'text/xml');
-      ssDoc.querySelectorAll('si').forEach(function(si){
-        sharedStrings.push(si.textContent || '');
-      });
-    }
+    ssDoc.querySelectorAll('si').forEach(function(si){
+      sharedStrings.push(si.textContent || '');
+    });
     
     function getCellValue(cell){
       const t = cell.getAttribute('t');
