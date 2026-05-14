@@ -51,6 +51,17 @@ async function initDB() {
         )
       `);
       await pool.query(`
+        CREATE TABLE IF NOT EXISTS users (
+          id SERIAL PRIMARY KEY,
+          name VARCHAR(200) UNIQUE NOT NULL,
+          password VARCHAR(200) NOT NULL,
+          role VARCHAR(100),
+          tabs JSONB DEFAULT '["vo","pr"]',
+          active BOOLEAN DEFAULT true,
+          created_at TIMESTAMP DEFAULT NOW()
+        )
+      `);
+      await pool.query(`
         CREATE TABLE IF NOT EXISTS pneus_roues (
           id VARCHAR(20) PRIMARY KEY,
           type VARCHAR(10) NOT NULL,
@@ -136,6 +147,72 @@ app.get('/api/inventory', async (req, res) => {
     console.error('Inventory proxy error:', err.message);
     res.status(500).json({ error: err.message });
   }
+});
+
+// AUTH - Login
+app.post('/api/login', async (req, res) => {
+  const { name, password } = req.body;
+  if (!name || !password) return res.status(400).json({ error: 'Nom et mot de passe requis' });
+  try {
+    // Check individual user password first
+    const result = await pool.query('SELECT * FROM users WHERE name=$1 AND active=true', [name]);
+    if (result.rows.length > 0) {
+      const user = result.rows[0];
+      if (user.password === password) {
+        return res.json({ ok: true, name: user.name, role: user.role, tabs: user.tabs || ['vo','pr'] });
+      } else {
+        return res.status(401).json({ error: 'Mot de passe incorrect' });
+      }
+    }
+    // Fallback: check global password for legacy users
+    const globalPwd = await pool.query("SELECT value FROM app_settings WHERE key='global_password'");
+    if (globalPwd.rows.length > 0 && globalPwd.rows[0].value === password) {
+      return res.json({ ok: true, name: name, role: null, tabs: ['vo','pr'] });
+    }
+    return res.status(401).json({ error: 'Accès refusé' });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// USERS CRUD (admin only)
+app.get('/api/users', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT id,name,role,tabs,active,created_at FROM users ORDER BY name ASC');
+    res.json(result.rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/users', async (req, res) => {
+  const { name, password, role, tabs } = req.body;
+  if (!name || !password) return res.status(400).json({ error: 'Nom et mot de passe requis' });
+  try {
+    const result = await pool.query(
+      'INSERT INTO users (name,password,role,tabs) VALUES ($1,$2,$3,$4) ON CONFLICT (name) DO UPDATE SET password=$2,role=$3,tabs=$4 RETURNING id,name,role,tabs,active',
+      [name, password, role||'', JSON.stringify(tabs||['vo','pr'])]
+    );
+    res.json(result.rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.patch('/api/users/:id', async (req, res) => {
+  const { password, role, tabs, active } = req.body;
+  try {
+    const fields = [], values = [];
+    let i = 1;
+    if (password !== undefined) { fields.push('password=$'+i++); values.push(password); }
+    if (role !== undefined) { fields.push('role=$'+i++); values.push(role); }
+    if (tabs !== undefined) { fields.push('tabs=$'+i++); values.push(JSON.stringify(tabs)); }
+    if (active !== undefined) { fields.push('active=$'+i++); values.push(active); }
+    values.push(req.params.id);
+    const result = await pool.query('UPDATE users SET '+fields.join(',')+' WHERE id=$'+i+' RETURNING id,name,role,tabs,active', values);
+    res.json(result.rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/api/users/:id', async (req, res) => {
+  try {
+    await pool.query('DELETE FROM users WHERE id=$1', [req.params.id]);
+    res.json({ deleted: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // VEHICLES CRUD
