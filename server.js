@@ -163,29 +163,38 @@ app.post('/api/login', async (req, res) => {
   if (!name || !password) return res.status(400).json({ error: 'Nom et mot de passe requis' });
   try {
     // Check individual user password first
-    const result = await pool.query('SELECT * FROM users WHERE name=$1 AND active=true', [name]);
-    if (result.rows.length > 0) {
-      const user = result.rows[0];
-      if (user.password === password) {
-        return res.json({ ok: true, name: user.name, role: user.role, tabs: user.tabs || ['vo','pr'] });
-      } else {
-        return res.status(401).json({ error: 'Mot de passe incorrect' });
-      }
-    }
-    // Fallback: check global password
+    let userFound = false;
     try {
-      const globalPwd = await pool.query("SELECT value FROM app_settings WHERE key='global_password'");
-      if (globalPwd.rows.length > 0 && globalPwd.rows[0].value === password) {
-        return res.json({ ok: true, name: name, role: null, tabs: ['vo','pr'] });
+      const result = await pool.query('SELECT * FROM users WHERE name=$1 AND active=true', [name]);
+      if (result.rows.length > 0) {
+        userFound = true;
+        const user = result.rows[0];
+        if (user.password === password) {
+          return res.json({ ok: true, name: user.name, role: user.role, tabs: user.tabs || ['vo','pr'] });
+        } else {
+          return res.status(401).json({ error: 'Mot de passe incorrect' });
+        }
       }
-    } catch(e2) {
-      // app_settings table might not exist yet, use hardcoded fallback
-      if (password === 'hyundai2025') {
+    } catch(e1) {
+      // users table might not exist yet
+      console.log('users table not ready:', e1.message);
+    }
+    // Fallback: global password (hardcoded + DB)
+    if (!userFound) {
+      let globalPwd = 'hyundai2025';
+      try {
+        const r = await pool.query("SELECT value FROM app_settings WHERE key='global_password'");
+        if (r.rows.length > 0) globalPwd = r.rows[0].value;
+      } catch(e2) { /* app_settings not ready yet */ }
+      if (password === globalPwd) {
         return res.json({ ok: true, name: name, role: null, tabs: ['vo','pr'] });
       }
     }
     return res.status(401).json({ error: 'Accès refusé' });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) {
+    console.error('login error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // USERS CRUD (admin only)
