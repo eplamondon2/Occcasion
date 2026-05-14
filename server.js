@@ -87,6 +87,14 @@ app.get('/api/test-inventory', async (req, res) => {
   }
 });
 
+// TEST PYTHON
+app.get('/api/test-python', async (req, res) => {
+  const { exec } = require('child_process');
+  exec('python3 -c "import openpyxl; print(openpyxl.__version__)"', (err, stdout, stderr) => {
+    res.json({ ok: !err, stdout: stdout.trim(), stderr: stderr.trim(), error: err?.message });
+  });
+});
+
 // HEALTH CHECK
 app.get('/api/health', async (req, res) => {
   try {
@@ -383,8 +391,8 @@ app.post('/api/import-excel', async (req, res) => {
     res.json({ items: items, count: items.length });
   } catch (err) {
     try { fs.unlinkSync(tmpFile); } catch(e) {}
-    console.error('import-excel:', err.message);
-    res.status(500).json({ error: err.message });
+    console.error('import-excel ERROR:', err.message);
+    res.status(500).json({ error: err.message, detail: err.stack });
   }
 });
 
