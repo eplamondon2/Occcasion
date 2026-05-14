@@ -333,72 +333,38 @@ app.post('/api/import-excel', async (req, res) => {
     fs.writeFileSync(tmpFile, Buffer.from(fileData, 'base64'));
     
     // Python script to parse Excel with color detection
-    const pyScript = `
-import sys, json, openpyxl
-
-wb = openpyxl.load_workbook('${tmpFile}')
-ws = wb.active
-items = []
-
-for row in ws.iter_rows():
-    prefix_cell = row[1]
-    if str(prefix_cell.value).strip() != '${prefix}':
-        continue
-    
-    # Check if row has red fill (FFFF0000)
-    is_red = False
-    for cell in row[:18]:
-        try:
-            fill = cell.fill
-            if fill and fill.fgColor and fill.fgColor.type == 'rgb':
-                rgb = fill.fgColor.rgb or ''
-                if rgb.upper() == 'FFFF0000':
-                    is_red = True
-                    break
-        except:
-            pass
-    
-    if is_red:
-        continue
-    
-    def v(r, i):
-        val = r[i].value if i < len(r) else None
-        s = str(val).strip() if val is not None else ''
-        return '' if s.lower() in ['nan', 'none', ''] else s
-    
-    num_raw = v(row, 2)
-    if not num_raw or num_raw == '0':
-        continue
-    try:
-        num = str(int(float(num_raw))).zfill(5)
-    except:
-        num = num_raw.zfill(5)
-    
-    item_id = '${prefix}' + num
-    
-    if '${prefix}' == 'PU':
-        items.append({
-            'id': item_id, 'type': 'pneu', 'vendu': False,
-            'stock_vehicule': v(row,3), 'marque_vehicule': v(row,4),
-            'modele_vehicule': v(row,5), 'annee_vehicule': v(row,6),
-            'marque_pneu': v(row,7), 'modele_pneu': v(row,8),
-            'saison': v(row,9).upper(), 'roues_mags': v(row,10),
-            'grandeur': v(row,11), 'usure': v(row,12),
-            'localisation': v(row,13), 'prix': v(row,14),
-            'notes': v(row,16)
-        })
-    else:
-        items.append({
-            'id': item_id, 'type': 'roue', 'vendu': False,
-            'stock_vehicule': v(row,3), 'marque_vehicule': v(row,4),
-            'modele_vehicule': v(row,5), 'dimension': v(row,6),
-            'roues_mags': v(row,7), 'bolt_pattern': v(row,8),
-            'localisation': v(row,9), 'prix': v(row,10),
-            'notes': v(row,12)
-        })
-
-print(json.dumps(items))
-`;
+    const pyScript = [
+      'import sys, json, openpyxl',
+      'wb = openpyxl.load_workbook("' + tmpFile + '")',
+      'ws = wb.active',
+      'prefix = "' + prefix + '"',
+      'items = []',
+      'def v(row, i):',
+      '    val = row[i].value if i < len(row) else None',
+      '    s = str(val).strip() if val is not None else ""',
+      '    return "" if s.lower() in ["nan", "none", ""] else s',
+      'for row in ws.iter_rows():',
+      '    if str(row[1].value).strip() != prefix: continue',
+      '    is_red = False',
+      '    for cell in row[:18]:',
+      '        try:',
+      '            fill = cell.fill',
+      '            if fill and fill.fgColor and fill.fgColor.type == "rgb":',
+      '                rgb = fill.fgColor.rgb or ""',
+      '                if rgb.upper() == "FFFF0000": is_red = True; break',
+      '        except: pass',
+      '    if is_red: continue',
+      '    num_raw = v(row, 2)',
+      '    if not num_raw or num_raw == "0": continue',
+      '    try: num = str(int(float(num_raw))).zfill(5)',
+      '    except: num = num_raw.zfill(5)',
+      '    item_id = prefix + num',
+      '    if prefix == "PU":',
+      '        items.append({"id":item_id,"type":"pneu","vendu":False,"stock_vehicule":v(row,3),"marque_vehicule":v(row,4),"modele_vehicule":v(row,5),"annee_vehicule":v(row,6),"marque_pneu":v(row,7),"modele_pneu":v(row,8),"saison":v(row,9).upper(),"roues_mags":v(row,10),"grandeur":v(row,11),"usure":v(row,12),"localisation":v(row,13),"prix":v(row,14),"notes":v(row,16)})',
+      '    else:',
+      '        items.append({"id":item_id,"type":"roue","vendu":False,"stock_vehicule":v(row,3),"marque_vehicule":v(row,4),"modele_vehicule":v(row,5),"dimension":v(row,6),"roues_mags":v(row,7),"bolt_pattern":v(row,8),"localisation":v(row,9),"prix":v(row,10),"notes":v(row,12)})',
+      'print(json.dumps(items))'
+    ].join('\n');
     
     fs.writeFileSync(outFile + '.py', pyScript);
     
