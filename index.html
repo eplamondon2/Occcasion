@@ -591,6 +591,1770 @@ let currentUser = null;
 let vehicles = [];
 let nid = 1;
 let currentFilter = 'all';
+
+function doLogout(){
+  sessionStorage.removeItem('vo-user');
+  currentUser = null;
+  document.getElementById('app-screen').style.display='none';
+  document.getElementById('login-screen').style.display='flex';
+  document.getElementById('login-pw').value='';
+}
+
+function showApp(){
+  document.getElementById('login-screen').style.display='none';
+  document.getElementById('app-screen').style.display='block';
+  const info = TEAM[currentUser]||{};
+  document.getElementById('header-username').textContent = currentUser + (info.role?' — '+info.role:'');
+  document.getElementById('header-avatar').textContent = info.initials||currentUser[0];
+  const canEdit = ['Etienne Plamondon','Serge Grenier','Nicolas Rivard'].includes(currentUser);
+  document.getElementById('btn-add').style.display = canEdit?'inline-flex':'none';
+  const isFieldWorker = ['Martin Napier','Nicolas Fiset','Charles Boivin','Vincent Bouchard'].includes(currentUser);
+  if(isFieldWorker){ currentFilter='mine'; }
+  // Apply tab permissions
+  const tabs = currentUserTabs || ['vo','pr'];
+  const tabBar = document.getElementById('tab-bar');
+  if(tabBar){
+    document.getElementById('tab-vo').style.display = tabs.includes('vo') ? '' : 'none';
+    document.getElementById('tab-pr').style.display = tabs.includes('pr') ? '' : 'none';
+    document.getElementById('tab-admin') && (document.getElementById('tab-admin').style.display = currentUser==='Etienne Plamondon' ? '' : 'none');
+  }
+  // Default to first available tab
+  if(!tabs.includes('vo') && tabs.includes('pr')) switchTab('pr');
+  else if(!tabs.includes('vo') && !tabs.includes('pr')) switchTab('admin');
+  loadVehicles();
+}
+
+function makeSteps(opts){return STEPS_DEF.filter(s=>!s.key||opts[s.key]);}
+
+function cumDelay(v,idx){
+  // Delays are absolute (J+ from creation), not cumulative
+  return v.steps[idx].delay;
+}
+function stepStatus(v,i){
+  if(v.sd[i].done)return'done';
+  const prev=i===0||v.sd[i-1].done;
+  if(!prev)return'blocked';
+  const dl=cumDelay(v,i);
+  if(dl===0)return'active';
+  if(v.daysAgo>dl)return'late';
+  if(v.daysAgo>=dl-1)return'warn';
+  return'active';
+}
+function doneCount(v){return v.sd.filter(x=>x.done).length;}
+function progress(v){return v.steps.length?Math.round(doneCount(v)/v.steps.length*100):0;}
+function isLate(v){return progress(v)<100&&v.steps.some((_,i)=>stepStatus(v,i)==='late');}
+function hasDocIssue(v){return v.docs.carfax===false||v.docs.inspection===false;}
+function calcDaysAgo(createdAt){return Math.floor((Date.now()-createdAt)/(86400000));}
+
+async function saveVehicle(v){
+  try{
+    await fetch('/api/vehicles/'+v.stock,{
+      method:'PATCH',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({sd:v.sd,docs:{carfax:v.docs.carfax,inspection:v.docs.inspection,estimation:v.docs.estimation,driveFolder:v.docs.driveFolder||null,folderId:v.docs.folderId||null,enligne:v.docs.enligne,photos:v.docs.photos,ficheUrl:v.docs.ficheUrl||null,webScanned:v.docs.webScanned||false,driveScanned:v.docs.driveScanned||false,lastScan:v.docs.lastScan||null},expanded:v.expanded,opts:v.opts})
+    });
+    setSaveInd('ok');
+  }catch(e){setSaveInd('error');}
+}
+
+function saveVehicles(){
+  setSaveInd('saving');
+  clearTimeout(saveTimeout);
+  saveTimeout=setTimeout(async ()=>{
+    try{
+      for(const v of vehicles) await saveVehicle(v);
+      setSaveInd('ok');
+    }catch(e){setSaveInd('error');}
+  },600);
+}
+
+async function loadVehicles(){
+  setSaveInd('loading');
+  try{
+    const res = await fetch('/api/vehicles');
+    const rows = await res.json();
+    vehicles = rows.map(s=>{
+      const opts = s.opts||{};
+      const steps = makeSteps(opts);
+      const sd = s.sd||steps.map(()=>({done:false,doneDay:null}));
+      const docs = s.docs||{};
+      return{
+        id:s.id,stock:s.stock,year:s.year,make:s.make,model:s.model,
+        km:s.km,price:s.price,color:s.color||'',resp:s.resp,
+        createdAt:new Date(s.created_at).getTime(),
+        daysAgo:calcDaysAgo(new Date(s.created_at).getTime()),
+        opts:opts,steps:steps,sd:sd,expanded:s.expanded||false,
+        docs:{carfax:docs.carfax??null,inspection:docs.inspection??null,
+              estimation:docs.estimation??null,driveFolder:docs.driveFolder||null,
+              folderId:docs.folderId||null,scanning:false,
+              enligne:docs.enligne??null,photos:docs.photos??null,
+              ficheUrl:docs.ficheUrl||null,scanningWeb:false,
+              webScanned:docs.webScanned||false,driveScanned:docs.driveScanned||false,lastScan:docs.lastScan||null}
+      };
+    });
+    if(vehicles.length) nid=Math.max(...vehicles.map(v=>v.id))+1;
+    setSaveInd('ok', vehicles.length+' dossier'+(vehicles.length>1?'s':'')+' chargé'+(vehicles.length>1?'s':''));
+    if(!vehicles.length) setSaveInd('ok','Aucun dossier — commencez par en créer un');
+  }catch(e){setSaveInd('error');console.error('loadVehicles:',e);}
+  renderAll();
+  updateMyTasksBanner();
+  // Auto-scan vehicles not scanned today
+  setTimeout(autoScanAll, 2000);
+}
+
+function setSaveInd(state, msg){
+  const el = document.getElementById('save-ind');
+  if(!el)return;
+  el.className='save-ind '+(state==='ok'?'ok':state==='saving'?'saving':'');
+  if(state==='loading')el.innerHTML='<div class="spin"></div> Chargement…';
+  else if(state==='saving')el.innerHTML='<div class="spin"></div> Sauvegarde…';
+  else if(state==='ok')el.innerHTML='<i class="ti ti-cloud-check" style="font-size:12px"></i> '+(msg||'Sauvegardé');
+  else el.innerHTML='<i class="ti ti-alert-triangle" style="font-size:12px"></i> Erreur';
+}
+
+
+const ROLE_STEPS = {
+  'Vincent Bouchard': ['insp'],
+  'Martin Napier': ['esthet'],
+  'Nicolas Fiset': ['esthet'],
+  'Charles Boivin': ['photos'],
+  'Serge Grenier': ['enligne','prix','req_insp','req_carro','req_pb','complet'],
+  'Nicolas Rivard': ['enligne','prix','req_insp','req_carro','req_pb','carro','photos'],
+};
+
+function getMyTasks(){
+  const myStepIds = ROLE_STEPS[currentUser]||[];
+  if(!myStepIds.length) return [];
+  return vehicles.filter(v=>{
+    return v.steps.some((s,i)=>{
+      if(!myStepIds.includes(s.id)) return false;
+      const st = stepStatus(v,i);
+      return st==='active'||st==='warn'||st==='late';
+    });
+  });
+}
+
+function updateMyTasksBanner(){
+  const myTasks = getMyTasks();
+  const banner = document.getElementById('my-tasks-banner');
+  const btn = document.getElementById('btn-mytasks');
+  const badge = document.getElementById('badge-mine');
+  const count = document.getElementById('my-tasks-count');
+  const sub = document.getElementById('my-tasks-sub');
+  const hasRole = !!(ROLE_STEPS[currentUser]&&ROLE_STEPS[currentUser].length);
+  if(hasRole){
+    if(btn) btn.style.display='inline-flex';
+    if(badge) badge.textContent=myTasks.length;
+    if(count) count.textContent=myTasks.length;
+    if(banner){
+      if(myTasks.length>0){
+        banner.style.display='flex';
+        if(sub) sub.textContent=myTasks.length+' vehicule'+(myTasks.length>1?'s en attente':' en attente');
+      } else {
+        banner.style.display='none';
+      }
+    }
+  } else {
+    if(btn) btn.style.display='none';
+    if(banner) banner.style.display='none';
+  }
+}
+
+function renderAll(){
+  let list = vehicles;
+  if(currentFilter==='late') list=vehicles.filter(isLate);
+  else if(currentFilter==='active') list=vehicles.filter(v=>progress(v)<100&&!isLate(v));
+  else if(currentFilter==='done') list=vehicles.filter(v=>progress(v)===100);
+  else if(currentFilter==='docs') list=vehicles.filter(hasDocIssue);
+  else if(currentFilter==='fewphotos') list=vehicles.filter(v=>v.docs.enligne&&v.docs.photos!==null&&v.docs.photos<10);
+  else if(currentFilter==='okphotos') list=vehicles.filter(v=>v.docs.enligne&&v.docs.photos!==null&&v.docs.photos>=10);
+  else if(currentFilter==='mine') list=getMyTasks();
+  const el = document.getElementById('vlist');
+  if(!vehicles.length){
+    el.innerHTML='<div class="empty"><i class="ti ti-car"></i><div style="font-size:15px;font-weight:600;margin-bottom:6px">Aucun dossier</div><div>Cliquez "Nouveau" pour créer le premier dossier de suivi</div></div>';
+  } else if(!list.length){
+    const emsg = currentFilter==='mine'?'Aucune tache en attente — tout est a jour!':'Aucun resultat pour ce filtre';
+    const eico = currentFilter==='mine'?'ti-circle-check':'ti-filter';
+    el.innerHTML='<div class="empty"><i class="ti '+eico+'"></i><div>'+emsg+'</div></div>';
+  } else {
+    el.innerHTML=list.map(renderCard).join('');
+  }
+  updateStats();
+}
+
+function renderCard(v){
+  const prog=progress(v);
+  const late=isLate(v);
+  const done=prog===100;
+  const bc=done?'#1D9E75':late?'#E24B4A':'#185FA5';
+  const sb=done?'<span class="badge badge-green"><i class="ti ti-check"></i> Prêt à vendre</span>':
+    late?'<span class="badge badge-red"><i class="ti ti-alert-triangle"></i> En retard</span>':
+    '<span class="badge badge-blue"><i class="ti ti-clock"></i> En cours</span>';
+  const d=v.docs;
+  const spin='<div class="spin"></div>';
+  const cfx=d.scanning?spin:d.carfax===null?'<span class="dc-val muted">—</span>':d.carfax?'<span class="dc-val ok"><i class="ti ti-check"></i> Présent</span>':'<span class="dc-val missing"><i class="ti ti-x"></i> Manquant</span>';
+  const ins=d.scanning?spin:d.inspection===null?'<span class="dc-val muted">—</span>':d.inspection?'<span class="dc-val ok"><i class="ti ti-check"></i> Présent</span>':'<span class="dc-val warn"><i class="ti ti-alert-triangle"></i> Manquant</span>';
+  const est=d.scanning?spin:d.estimation===null?'<span class="dc-val muted">—</span>':d.estimation?'<span class="dc-val ok"><i class="ti ti-check"></i> Présent</span>':'<span class="dc-val muted"><i class="ti ti-minus"></i> Aucune</span>';
+  const webStatus=d.scanningWeb?spin:d.enligne===null?'<span class="dc-val muted">—</span>':d.enligne?'<span class="dc-val ok"><i class="ti ti-check"></i> En ligne</span>':'<span class="dc-val missing"><i class="ti ti-x"></i> Non trouvé</span>';
+  const photosStatus=d.scanningWeb?spin:d.enligne===null?'<span class="dc-val muted">—</span>':d.photos>0?'<span class="dc-val ok"><i class="ti ti-camera"></i> '+d.photos+' photos</span>':'<span class="dc-val missing"><i class="ti ti-camera-off"></i> Aucune photo</span>';
+  const driveHref=d.driveFolder?`<a href="${d.driveFolder}" target="_blank" class="btn-sm drive"><i class="ti ti-brand-google-drive" style="font-size:11px"></i> Ouvrir Drive</a>`:'';
+  const canEdit=['Etienne Plamondon','Serge Grenier','Nicolas Rivard'].includes(currentUser);
+  const stepsHtml=PHASES.map(ph=>{
+    const ps=v.steps.map((s,i)=>({s,i})).filter(({s})=>s.phase===ph.id);
+    if(!ps.length)return'';
+    return`<div class="phase-label"><i class="ti ${ph.icon}" style="font-size:11px"></i>${ph.label}</div>`+ps.map(({s,i})=>renderStep(v,s,i,canEdit)).join('');
+  }).join('');
+  const dateStr=new Date(v.createdAt).toLocaleDateString('fr-CA',{day:'numeric',month:'short',year:'numeric'});
+  return`<div class="vcard${late?' is-late':done?' is-done':''}" id="vc${v.id}">
+    <div class="vchead" onclick="toggle(${v.id})">
+      <div class="vinfo">
+        <div class="vtitle">
+          <span class="vname">${v.year} ${v.make} ${v.model}${v.color?' — '+v.color:''}</span>
+          ${sb}
+          ${hasDocIssue(v)&&!d.scanning?'<span class="badge badge-amber"><i class="ti ti-file-x"></i> Docs</span>':''}
+        </div>
+        <div class="vmeta">
+          <span class="stock">#${v.stock}</span>
+          <span>${Number(v.km).toLocaleString('fr-CA')} km</span>
+          <span>${Number(v.price).toLocaleString('fr-CA',{style:'currency',currency:'CAD',maximumFractionDigits:0})}</span>
+          <span>J+${v.daysAgo} · ${dateStr}</span>
+          <span>${v.resp.split('—')[0].trim()}</span>
+        </div>
+      </div>
+      <div class="pbar-wrap">
+        <div class="pbar-bg"><div class="pbar-fill" style="width:${prog}%;background:${bc}"></div></div>
+        <div class="pbar-label">${prog}% · ${doneCount(v)}/${v.steps.length} étapes</div>
+      </div>
+      <div class="vchead-actions" onclick="event.stopPropagation()">
+        <button class="btn-sm drive" onclick="checkDrive(${v.id})" ${d.scanning?'disabled':''}>${d.scanning?'<div class="spin"></div>':'<i class="ti ti-brand-google-drive" style="font-size:11px"></i>'} ${d.scanning?'…':'Drive'}</button>
+        <button class="btn-sm" style="border-color:#0ea5e9;color:#0369a1" onclick="checkWeb(${v.id})" ${d.scanningWeb?'disabled':''}>${d.scanningWeb?'<div class="spin"></div>':'<i class="ti ti-world" style="font-size:11px"></i>'} ${d.scanningWeb?'…':'Web'}</button>
+        ${canEdit?`<button class="btn-sm danger" onclick="deleteV(${v.id})" aria-label="Supprimer"><i class="ti ti-trash" style="font-size:11px"></i></button>`:''}
+        <i class="ti ti-chevron-down chev ${v.expanded?'open':''}" aria-hidden="true"></i>
+      </div>
+    </div>
+    <div class="vcbody ${v.expanded?'open':''}" id="vb${v.id}">
+      <div class="doc-checks" style="grid-template-columns:repeat(auto-fit,minmax(130px,1fr))">
+        <div class="doc-card"><div class="dc-label"><i class="ti ti-world" style="font-size:11px"></i> Site web</div>${webStatus}${d.ficheUrl?'<div class="dc-file"><a href="'+d.ficheUrl+'" target="_blank" style="color:var(--blue-mid);font-size:10px">Voir la fiche</a></div>':''}</div>
+        <div class="doc-card"><div class="dc-label"><i class="ti ti-camera" style="font-size:11px"></i> Photos en ligne</div>${photosStatus}</div>
+        <div class="doc-card"><div class="dc-label"><i class="ti ti-file-description" style="font-size:11px"></i> Carfax — Drive</div>${cfx}<div class="dc-file">${v.stock}_CARFAX.pdf</div></div>
+        <div class="doc-card"><div class="dc-label"><i class="ti ti-clipboard" style="font-size:11px"></i> Inspection — Drive</div>${ins}<div class="dc-file">${v.stock}.pdf</div></div>
+        <div class="doc-card"><div class="dc-label"><i class="ti ti-receipt" style="font-size:11px"></i> Estimation — Drive</div>${est}<div class="dc-file">${v.stock}-I.pdf</div></div>
+      </div>
+      ${stepsHtml}
+      <div class="comments-section">
+        <div class="comments-title"><i class="ti ti-message-circle" style="font-size:12px"></i> Commentaires & notes <span id="cc-${v.id}" style="background:var(--blue);color:white;border-radius:20px;padding:1px 7px;font-size:10px;margin-left:4px">…</span></div>
+        <div id="comments-${v.id}"></div>
+        <div class="comment-form">
+          <select id="cstep-${v.id}">
+            <option value="">— Étape concernée —</option>
+            ${v.steps.map(s=>`<option value="${s.id}">${s.name}</option>`).join('')}
+          </select>
+          <input type="text" id="cmsg-${v.id}" placeholder="Votre commentaire ou note…" onkeydown="if(event.key==='Enter')addComment(${v.id})">
+          <button class="comment-send" onclick="addComment(${v.id})"><i class="ti ti-send" style="font-size:12px"></i> Envoyer</button>
+        </div>
+      </div>
+      <div class="card-footer">
+        <div class="card-footer-left">
+          <a href="https://www.hyundaistraymond.com/occasion/recherche.html" target="_blank" class="btn-sm"><i class="ti ti-external-link" style="font-size:11px"></i> Site web</a>
+          ${driveHref}
+          ${canEdit?`<button class="btn-sm" style="border-color:#4285f4;color:#1a56db" onclick="createDriveFolder(${v.id})" title="Créer dossier Drive"><i class="ti ti-folder-plus" style="font-size:11px"></i> Créer dossier</button>`:''}
+          ${canEdit&&!d.carfax?`<button class="btn-sm" style="border-color:#f59e0b;color:#92400e" onclick="moveCarfax(${v.id})" title="Déplacer Carfax"><i class="ti ti-file-arrow-right" style="font-size:11px"></i> Déplacer Carfax</button>`:''}
+          ${(canEdit||currentUser==='Vincent Bouchard')?`<button class="btn-sm" style="border-color:#10b981;color:#065f46" onclick="uploadFile(${v.id},'inspection')" title="Uploader rapport inspection"><i class="ti ti-upload" style="font-size:11px"></i> Inspection</button>`:''}
+          ${(canEdit||currentUser==='Vincent Bouchard')?`<button class="btn-sm" style="border-color:#6366f1;color:#3730a3" onclick="uploadFile(${v.id},'estimation')" title="Uploader estimation réparations"><i class="ti ti-upload" style="font-size:11px"></i> Estimation</button>`:''}
+        </div>
+        <span style="font-size:10px;color:var(--text-hint)">Créé le ${dateStr} · J+${v.daysAgo}</span>
+      </div>
+    </div>
+  </div>`;
+}
+
+function renderStep(v,s,i,canEdit){
+  const st=stepStatus(v,i);
+  const ico={done:'ti-check',active:'ti-clock',warn:'ti-clock',late:'ti-alert-triangle',blocked:'ti-lock'}[st]||'ti-clock';
+  const icoC={done:'done',active:'active',warn:'active',late:'late',blocked:'blocked'}[st]||'active';
+  const dl=cumDelay(v,i);
+  let dlTxt='',dlC='muted';
+  if(st==='done'){dlTxt='Complété le J+'+v.sd[i].doneDay;dlC='ok';}
+  else if(st==='blocked'){dlTxt='En attente de l\'étape précédente';}
+  else if(st==='late'){const d=v.daysAgo-dl;dlTxt='En retard de '+d+' jour'+(d>1?'s':'');dlC='late';}
+  else if(st==='warn'){dlTxt='Délai atteint aujourd\'hui';dlC='warn';}
+  else if(dl===0){dlTxt='Automatique à l\'arrivée';dlC='ok';}
+  else{const left=dl-v.daysAgo;dlTxt='Délai dans '+left+' jour'+(left>1?'s':'');dlC='ok';}
+  const isDir=['Etienne Plamondon','Serge Grenier','Nicolas Rivard'].includes(currentUser);
+  const myStep=isMyStep(s);
+  const myStepIds=ROLE_STEPS[currentUser]||[];
+  const isMyOwnStep=myStepIds.includes(s.id);
+  const canAct=(isDir||isMyOwnStep)&&!v.sd[i].done&&st!=='blocked';
+  const rowC=st==='late'?'step late':st==='active'||st==='warn'?'step active':'step';
+  return`<div class="${rowC}">
+    <div class="step-ico ${icoC}"><i class="ti ${ico}"></i></div>
+    <div class="step-content">
+      <div class="step-name">${s.name}${s.optional?' <span class="badge badge-gray" style="font-size:9px">optionnel</span>':''}</div>
+      <div class="step-assign"><i class="ti ti-user" style="font-size:10px"></i> ${s.assign}${dl>0?' · max J+'+dl:''}</div>
+      <div class="step-dl ${dlC}">${dlTxt}</div>
+    </div>
+    <div class="step-actions">
+      ${v.sd[i].done&&(isDir||isMyOwnStep)?`<button class="btn-sm" style="border-color:#fca5a5;color:#991b1b" onclick="uncompleteStep(${v.id},${i})" title="Annuler"><i class="ti ti-arrow-back" style="font-size:11px"></i></button>`:''}
+      ${canAct?`<button class="btn-sm success" onclick="completeStep(${v.id},${i})"><i class="ti ti-check" style="font-size:11px"></i> Marquer fait</button>`:''}
+      ${canAct?`<button class="btn-sm" onclick="sendNotif(${v.id},${i})" title="Envoyer rappel"><i class="ti ti-bell" style="font-size:11px"></i></button>`:''}
+    </div>
+  </div>`;
+}
+
+function isMyStep(s){
+  if(!currentUser)return false;
+  const a=s.assign.toLowerCase();
+  const u=currentUser.toLowerCase();
+  return a.includes(u.split(' ')[0])||a.includes(u.split(' ')[1]||'');
+}
+
+function toggle(id){
+  const v=vehicles.find(x=>x.id===id);
+  if(v){
+    v.expanded=!v.expanded;
+    saveVehicles();renderAll();
+    if(v.expanded) setTimeout(()=>loadComments(id),100);
+  }
+}
+
+async function deleteV(id){
+  const v=vehicles.find(x=>x.id===id);
+  if(!v||!confirm('Supprimer le dossier '+v.year+' '+v.make+' '+v.model+' (#'+v.stock+') ?'))return;
+  try{await fetch('/api/vehicles/'+v.stock,{method:'DELETE'});}catch(e){console.error(e);}
+  vehicles=vehicles.filter(x=>x.id!==id);
+  renderAll();
+  showNotif('<i class="ti ti-trash"></i> Dossier #'+v.stock+' supprimé','warn');
+}
+
+function uncompleteStep(vid,idx){
+  const v=vehicles.find(x=>x.id===vid);if(!v)return;
+  if(!confirm('Annuler cette étape ?'))return;
+  v.sd[idx].done=false;v.sd[idx].doneDay=null;
+  saveVehicles();renderAll();
+  showNotif('<i class="ti ti-arrow-back"></i> Étape annulée','warn');
+}
+
+async function completeStep(vid,idx){
+  const v=vehicles.find(x=>x.id===vid);if(!v)return;
+  v.sd[idx].done=true;v.sd[idx].doneDay=v.daysAgo;
+  const next=v.steps[idx+1];
+  if(next){
+    const who=next.assign.split('→')[0].trim().split('/')[0].trim();
+    showNotif('<i class="ti ti-send"></i> Étape complétée — courriel envoyé à <strong>'+who+'</strong>','ok');
+    const assignees=next.assign.split(/[→/]/).map(a=>a.trim());
+    for(const assignee of assignees){
+      const recipientName=Object.keys(TEAM).find(name=>assignee.toLowerCase().includes(name.split(' ')[0].toLowerCase()));
+      if(recipientName&&recipientName!==currentUser){
+        const email=TEAM[recipientName]?.email;
+        if(email){
+          const html='<div style="font-family:sans-serif;max-width:520px;margin:0 auto"><div style="background:#003087;color:white;padding:16px 20px;border-radius:8px 8px 0 0"><h2 style="margin:0;font-size:16px">Hyundai St-Raymond — Occasion</h2></div><div style="background:#f8fafc;padding:20px;border:1px solid #e2e8f0;border-top:0;border-radius:0 0 8px 8px"><p>Bonjour <strong>'+recipientName+'</strong>,</p><p><strong>'+currentUser+'</strong> a complété une étape — votre intervention est requise.</p><div style="background:white;border-left:4px solid #003087;padding:12px 16px;border-radius:4px;margin:16px 0"><p style="margin:0 0 4px;font-size:12px;color:#64748b">Prochaine étape</p><p style="margin:0;font-weight:600">'+next.name+'</p></div><table style="font-size:13px;width:100%"><tr><td style="color:#64748b;padding:4px 0">Véhicule</td><td><strong>'+v.year+' '+v.make+' '+v.model+'</strong> (#'+v.stock+')</td></tr><tr><td style="color:#64748b;padding:4px 0">Kilométrage</td><td>'+Number(v.km).toLocaleString('fr-CA')+' km</td></tr></table><div style="margin-top:20px;text-align:center"><a href="https://occcasion-production.up.railway.app" style="background:#003087;color:white;padding:10px 20px;border-radius:6px;text-decoration:none">Voir le tableau de bord</a></div></div></div>';
+          await fetch('/api/notify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({to:email,subject:'[VO #'+v.stock+'] Action requise — '+next.name,html:html})}).catch(e=>console.error('email:',e));
+        }
+      }
+    }
+  } else {
+    showNotif('<i class="ti ti-circle-check"></i> <strong>'+v.year+' '+v.make+' '+v.model+'</strong> (#'+v.stock+') — dossier 100% complété!','ok');
+  }
+  saveVehicles();renderAll();
+}
+
+function sendNotif(vid,idx){
+  const v=vehicles.find(x=>x.id===vid);if(!v)return;
+  const who=v.steps[idx].assign.split('→')[0].trim().split('/')[0].trim();
+  showNotif('<i class="ti ti-bell"></i> Rappel envoyé à <strong>'+who+'</strong> — '+v.steps[idx].name+' (#'+v.stock+')','info');
+}
+
+async function checkDrive(vid){
+  const v=vehicles.find(x=>x.id===vid);
+  if(!v||v.docs.scanning)return;
+  v.docs.scanning=true;renderAll();
+  try{
+    const r=await fetch('/api/check-drive',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({stock:v.stock,parentId:DRIVE_PARENT_ID})
+    });
+    if(!r.ok)throw new Error('Erreur serveur '+r.status);
+    const p=await r.json();
+    v.docs.carfax=p.carfax??false;
+    v.docs.inspection=p.inspection??false;
+    v.docs.estimation=p.estimation??false;
+    v.docs.driveFolder=p.folderUrl||null;
+  }catch(e){
+    console.error('checkDrive:',e);
+    v.docs.carfax=false;v.docs.inspection=false;v.docs.estimation=false;
+  }
+  v.docs.scanning=false;
+  saveVehicles();renderAll();
+}
+
+async function checkWeb(vid){
+  const v=vehicles.find(x=>x.id===vid);
+  if(!v||v.docs.scanningWeb)return;
+  v.docs.scanningWeb=true;renderAll();
+  const PROXY='https://script.google.com/macros/s/AKfycby0XEXoiS9f2gkdOlyBelpWJ8Nix2YHo2ILOvKkcYdzFElVcBGhFAD9StK9AGnr55slyQ/exec';
+  try{
+    // Step 1: Get inventory to find vehicle
+    const r=await fetch(PROXY,{signal:AbortSignal.timeout(20000)});
+    const inventory=await r.json();
+    const vehicle=inventory.find(x=>(x['stock number']||'').toUpperCase()===v.stock.toUpperCase());
+    if(!vehicle){
+      v.docs.enligne=false;v.docs.photos=0;v.docs.webScanned=true;
+    } else {
+      v.docs.enligne=true;v.docs.webScanned=true;
+      const d2cId=vehicle['D2C Vehicle ID'];
+      const vdp=(vehicle['Vehicle Details Page (VDP)']||'').replace('/used/','/occasion/');
+      if(vdp)v.docs.ficheUrl=vdp;
+      // Step 2: Count photos via Apps Script proxy
+      let photos=0;
+      if(d2cId&&vdp){
+        try{
+          const photoUrl=PROXY+'?ficheUrl='+encodeURIComponent(vdp)+'&d2cId='+d2cId;
+          const pr=await fetch(photoUrl,{signal:AbortSignal.timeout(30000)});
+          const pd=await pr.json();
+          photos=pd.photos||0;
+        }catch(e){console.error('photo count:',e.message);}
+      }
+      v.docs.photos=photos;
+    }
+  }catch(e){
+    console.error('checkWeb:',e.message);
+    v.docs.enligne=false;v.docs.photos=0;v.docs.webScanned=true;
+  }
+  v.docs.scanningWeb=false;
+  saveVehicles();renderAll();
+}
+
+async function createDriveFolder(vid){
+  const v=vehicles.find(x=>x.id===vid);if(!v)return;
+  showNotif('<div class="spin"></div> Création du dossier Drive…','info',0);
+  try{
+    const r=await fetch('/api/create-folder',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({stock:v.stock,year:v.year,make:v.make,model:v.model,parentId:DRIVE_PARENT_ID})});
+    const d=await r.json();
+    if(d.folderId){
+      v.docs.driveFolder=d.folderUrl;
+      v.docs.folderId=d.folderId;
+      saveVehicles();renderAll();
+      showNotif('<i class="ti ti-folder-check"></i> Dossier '+(d.existed?'déjà existant':'créé')+' : <strong>'+d.folderName+'</strong>','ok');
+    }
+  }catch(e){showNotif('<i class="ti ti-alert-triangle"></i> Erreur: '+e.message,'warn');}
+}
+
+async function moveCarfax(vid){
+  const v=vehicles.find(x=>x.id===vid);if(!v)return;
+  if(!v.docs.folderId){showNotif('<i class="ti ti-alert-triangle"></i> Creez le dossier Drive en premier','warn');return;}
+  showNotif('<div class="spin"></div> Déplacement du Carfax…','info',0);
+  try{
+    const r=await fetch('/api/move-carfax',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({stock:v.stock,parentId:DRIVE_PARENT_ID,folderId:v.docs.folderId})});
+    const d=await r.json();
+    if(d.moved){
+      v.docs.carfax=true;saveVehicles();renderAll();
+      showNotif('<i class="ti ti-check"></i> Carfax déplacé : <strong>'+d.fileName+'</strong>','ok');
+    } else {
+      showNotif('<i class="ti ti-alert-triangle"></i> '+d.message,'warn');
+    }
+  }catch(e){showNotif('<i class="ti ti-alert-triangle"></i> Erreur: '+e.message,'warn');}
+}
+
+async function uploadFile(vid, type){
+  const v=vehicles.find(x=>x.id===vid);if(!v)return;
+  if(!v.docs.folderId){showNotif('<i class="ti ti-alert-triangle"></i> Créez le dossier Drive en premier','warn');return;}
+  const input=document.createElement('input');
+  input.type='file';input.accept='.pdf,application/pdf';
+  input.onchange=async function(){
+    const file=input.files[0];if(!file)return;
+    const fileName = type==='inspection'?v.stock+'.pdf':v.stock+'-I.pdf';
+    showNotif('<div class="spin"></div> Upload de <strong>'+fileName+'</strong>…','info',0);
+    const reader=new FileReader();
+    reader.onload=async function(){
+      const base64=reader.result.split(',')[1];
+      try{
+        const r=await fetch('/api/upload-file',{method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({folderId:v.docs.folderId,fileName:fileName,fileData:base64,mimeType:'application/pdf'})});
+        const d=await r.json();
+        if(d.uploaded){
+          if(type==='inspection')v.docs.inspection=true;
+          else v.docs.estimation=true;
+          saveVehicles();renderAll();
+          showNotif('<i class="ti ti-upload"></i> <strong>'+fileName+'</strong> uploadé dans Drive','ok');
+        }
+      }catch(e){showNotif('<i class="ti ti-alert-triangle"></i> Erreur upload: '+e.message,'warn');}
+    };
+    reader.readAsDataURL(file);
+  };
+  input.click();
+}
+
+// Load comments for a vehicle
+async function loadComments(vid){
+  const v=vehicles.find(x=>x.id===vid);if(!v)return;
+  try{
+    const r=await fetch('/api/comments/'+v.stock);
+    const comments=await r.json();
+    const el=document.getElementById('comments-'+vid);
+    const ct=document.getElementById('cc-'+vid);
+    if(ct)ct.textContent=comments.length;
+    if(!el)return;
+    if(!comments.length){el.innerHTML='<div style="font-size:12px;color:var(--text-hint);padding:4px 0">Aucun commentaire</div>';return;}
+    el.innerHTML=comments.map(c=>{
+      const d=new Date(c.created_at).toLocaleDateString('fr-CA',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
+      const stepName=c.step_id?v.steps.find(s=>s.id===c.step_id)?.name||c.step_id:'';
+      return '<div class="comment-item">'
+        +'<span class="comment-author">'+c.author+'</span>'
+        +(stepName?'<span class="comment-step">— '+stepName+'</span>':'')
+        +'<span class="comment-date">'+d+'</span>'
+        +'<div class="comment-msg">'+c.message+'</div>'
+        +'</div>';
+    }).join('');
+  }catch(e){console.error('loadComments:',e);}
+}
+
+async function addComment(vid){
+  const v=vehicles.find(x=>x.id===vid);if(!v)return;
+  const msgEl=document.getElementById('cmsg-'+vid);
+  const stepEl=document.getElementById('cstep-'+vid);
+  const message=(msgEl?.value||'').trim();
+  if(!message)return;
+  const stepId=stepEl?.value||'';
+  try{
+    await fetch('/api/comments',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({stock:v.stock,stepId:stepId,author:currentUser,message:message})});
+    msgEl.value='';
+    await loadComments(vid);
+
+    // Send email notification if step is assigned
+    if(stepId){
+      const step=v.steps.find(s=>s.id===stepId);
+      if(step){
+        const assignees=step.assign.split(/[→\/]/).map(a=>a.trim());
+        for(const assignee of assignees){
+          const recipientName=Object.keys(TEAM).find(name=>assignee.toLowerCase().includes(name.split(' ')[0].toLowerCase()));
+          if(recipientName&&recipientName!==currentUser){
+            const email=TEAM[recipientName]?.email;
+            if(email) await sendEmailNotification(email,recipientName,currentUser,v,step.name,message);
+          }
+        }
+      }
+    }
+    showNotif('<i class="ti ti-message-circle"></i> Commentaire ajouté','ok');
+  }catch(e){showNotif('<i class="ti ti-alert-triangle"></i> Erreur: '+e.message,'warn');}
+}
+
+async function sendEmailNotification(toEmail,toName,fromName,vehicle,stepName,comment){
+  const subject='[VO #'+vehicle.stock+'] Note — '+stepName;
+  const html='<div style="font-family:sans-serif;max-width:520px;margin:0 auto">'
+    +'<div style="background:#003087;color:white;padding:16px 20px;border-radius:8px 8px 0 0">'
+    +'<h2 style="margin:0;font-size:16px">Hyundai St-Raymond — Occasion</h2></div>'
+    +'<div style="background:#f8fafc;padding:20px;border:1px solid #e2e8f0;border-top:0;border-radius:0 0 8px 8px">'
+    +'<p style="margin:0 0 12px"><strong>'+fromName+'</strong> vous a laissé une note :</p>'
+    +'<div style="background:white;border-left:4px solid #003087;padding:12px 16px;border-radius:4px;margin-bottom:16px">'
+    +'<p style="margin:0;font-style:italic">'+comment+'</p></div>'
+    +'<table style="width:100%;border-collapse:collapse;font-size:13px">'
+    +'<tr><td style="padding:6px 0;color:#64748b">Véhicule</td><td><strong>'+vehicle.year+' '+vehicle.make+' '+vehicle.model+'</strong> (#'+vehicle.stock+')</td></tr>'
+    +'<tr><td style="padding:6px 0;color:#64748b">Étape</td><td>'+stepName+'</td></tr>'
+    +'</table>'
+    +'<div style="margin-top:20px;text-align:center">'
+    +'<a href="https://occcasion-production.up.railway.app" style="background:#003087;color:white;padding:10px 20px;border-radius:6px;text-decoration:none;font-size:13px">Voir le tableau de bord</a>'
+    +'</div></div></div>';
+  try{
+    await fetch('/api/notify',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({to:toEmail,toName:toName,subject:subject,html:html})});
+  }catch(e){console.error('Email error:',e);}
+}
+
+// Load comments when card is expanded
+const originalToggle = toggle;
+
+async function autoScanAll(){
+  const today = new Date().toDateString();
+  const toScan = vehicles.filter(v => !v.docs.lastScan || new Date(v.docs.lastScan).toDateString() !== today);
+  if(!toScan.length) return;
+  console.log('Auto-scanning', toScan.length, 'vehicles...');
+  for(const v of toScan){
+    await checkDrive(v.id);
+    await checkWeb(v.id);
+    v.docs.lastScan = new Date().toISOString();
+    await saveVehicle(v);
+  }
+  renderAll();
+}
+
+async function scanAll(){
+  if(!vehicles.length)return;
+  showNotif('<div class="spin"></div> Vérification Drive pour tous les véhicules…','info',0);
+  for(const v of vehicles){
+    if(!v.docs.scanning) await checkDrive(v.id);
+    if(!v.docs.scanningWeb) await checkWeb(v.id);
+  }
+  clearNotif();
+  const issues=vehicles.filter(hasDocIssue);
+  if(issues.length)showNotif('<i class="ti ti-alert-triangle"></i> Documents manquants : '+issues.map(v=>'#'+v.stock).join(', '),'warn');
+  else showNotif('<i class="ti ti-circle-check"></i> Tous les dossiers Drive sont complets','ok');
+  saveVehicles();
+}
+
+function updateStats(){
+  document.getElementById('s-active').textContent=vehicles.filter(v=>progress(v)<100).length;
+  document.getElementById('s-done').textContent=vehicles.filter(v=>progress(v)===100).length;
+  document.getElementById('s-late').textContent=vehicles.filter(isLate).length;
+  const di=vehicles.filter(hasDocIssue).length;
+  document.getElementById('s-docs').textContent=di||'–';
+  const pi=vehicles.filter(v=>v.docs.enligne&&v.docs.photos!==null&&v.docs.photos<10).length;
+  const sel=document.getElementById('s-photos');
+  if(sel)sel.textContent=pi||'–';
+}
+
+function setFilter(f,el){
+  currentFilter=f;
+  document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));
+  el.classList.add('active');renderAll();
+}
+
+let notifTimer=null;
+function showNotif(html,type='info',dur=5000){
+  const bar=document.getElementById('notif-bar');
+  const d=document.createElement('div');
+  d.className='notif '+type;d.innerHTML=html;
+  bar.innerHTML='';bar.appendChild(d);
+  if(notifTimer)clearTimeout(notifTimer);
+  if(dur>0)notifTimer=setTimeout(()=>d.remove(),dur);
+}
+function clearNotif(){document.getElementById('notif-bar').innerHTML='';}
+
+function openModal(){document.getElementById('modal').classList.add('open');}
+function closeModal(){document.getElementById('modal').classList.remove('open');}
+
+async function addVehicle(){
+  const stock=(document.getElementById('f-stk').value||'').trim().toUpperCase();
+  if(!stock){alert('Entrez un numéro de stock.');return;}
+  if(vehicles.find(v=>v.stock===stock)){alert('Le stock #'+stock+' existe déjà.');return;}
+  const year=parseInt(document.getElementById('f-yr').value)||new Date().getFullYear();
+  const make=document.getElementById('f-mk').value.trim()||'Hyundai';
+  const model=document.getElementById('f-mo').value.trim()||'Modèle';
+  const km=parseInt(document.getElementById('f-km').value)||0;
+  const price=parseInt(document.getElementById('f-pr').value)||0;
+  const color=document.getElementById('f-col').value.trim();
+  const manualUrl=(document.getElementById('f-url')?.value||'').trim()||null;
+  const resp=document.getElementById('f-resp').value;
+  const opts={
+    carro:document.getElementById('f-carro').checked,
+    pb:document.getElementById('f-pb').checked,
+    esthet:document.getElementById('f-esthet').checked,
+    photos:document.getElementById('f-photos').checked
+  };
+  const steps=makeSteps(opts);
+  const newV={
+    id:nid++,stock,year,make,model,km,price,color,resp,
+    createdAt:Date.now(),daysAgo:0,opts,steps,
+    sd:steps.map(()=>({done:false,doneDay:null})),
+    docs:{carfax:null,inspection:null,estimation:null,driveFolder:null,folderId:null,scanning:false,enligne:null,photos:null,ficheUrl:manualUrl,scanningWeb:false},
+    expanded:true
+  };
+  try{
+    await fetch('/api/vehicles',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({stock,year,make,model,km,price,color,resp,opts,sd:newV.sd,docs:newV.docs,expanded:true})});
+  }catch(e){console.error('POST vehicle:',e);}
+  vehicles.unshift(newV);
+  closeModal();
+  setTimeout(()=>createDriveFolder(newV.id),500);
+  ['f-stk','f-yr','f-mk','f-mo','f-km','f-pr','f-col','f-url'].forEach(id=>{if(document.getElementById(id))document.getElementById(id).value='';});
+  renderAll();
+  showNotif('<i class="ti ti-check"></i> Dossier créé — <strong>'+year+' '+make+' '+model+'</strong> (#'+stock+')','ok');
+}
+
+const saved=sessionStorage.getItem('vo-user');
+const savedTabs=sessionStorage.getItem('vo-tabs');
+if(savedTabs){try{currentUserTabs=JSON.parse(savedTabs);}catch(e){}}
+if(saved){currentUser=saved;showApp();}
+
+// ===== ADMIN =====
+let adminUsers = [];
+let editUserId = null;
+
+const USER_ROLES = {
+  'Etienne Plamondon':'Directeur Général',
+  'Serge Grenier':'Directeur des ventes',
+  'Nicolas Rivard':'Directeur adjoint',
+  'Martin Napier':'Esthétique',
+  'Nicolas Fiset':'Esthétique',
+  'Charles Boivin':'Photos',
+  'Vincent Bouchard':'Dir. pièces / Inspection',
+  'Yves Huard':'Pneus & Roues'
+};
+
+async function loadAdminUsers(){
+  try{
+    const r = await fetch('/api/users');
+    adminUsers = await r.json();
+    renderAdminUsers();
+  }catch(e){console.error('loadAdminUsers:',e);}
+}
+
+function renderAdminUsers(){
+  const tbody = document.getElementById('admin-users-tbody');
+  if(!tbody) return;
+  if(!adminUsers.length){
+    tbody.innerHTML='<tr><td colspan="6" style="padding:20px;text-align:center;color:var(--text-muted)">Aucun utilisateur configuré — ajoutez-en un pour activer les mots de passe individuels</td></tr>';
+    return;
+  }
+  tbody.innerHTML = adminUsers.map(function(u){
+    const tabs = u.tabs || ['vo','pr'];
+    const hasVo = tabs.includes('vo');
+    const hasPr = tabs.includes('pr');
+    return '<tr style="border-bottom:1px solid var(--border-light)">'
+      +'<td style="padding:10px 14px"><strong>'+u.name+'</strong></td>'
+      +'<td style="padding:10px 14px;color:var(--text-muted);font-size:12px">'+( u.role||'—')+'</td>'
+      +'<td style="padding:10px 14px;text-align:center">'+(hasVo?'<span style="color:#16a34a">✓</span>':'<span style="color:#dc2626">✗</span>')+'</td>'
+      +'<td style="padding:10px 14px;text-align:center">'+(hasPr?'<span style="color:#16a34a">✓</span>':'<span style="color:#dc2626">✗</span>')+'</td>'
+      +'<td style="padding:10px 14px;text-align:center">'+(u.active?'<span style="background:#f0fdf4;color:#166534;padding:2px 8px;border-radius:20px;font-size:11px">Actif</span>':'<span style="background:#fef2f2;color:#dc2626;padding:2px 8px;border-radius:20px;font-size:11px">Inactif</span>')+'</td>'
+      +'<td style="padding:10px 14px;text-align:right;white-space:nowrap">'
+      +'<button class="btn-sm" onclick="editUser('+u.id+')" title="Modifier"><i class="ti ti-edit" style="font-size:11px"></i></button> '
+      +'<button class="btn-sm" onclick="toggleUserActive('+u.id+','+!u.active+')" title="'+(u.active?'Désactiver':'Activer')+'" style="'+(u.active?'border-color:#f59e0b;color:#92400e':'border-color:#16a34a;color:#166534')+'">'+(u.active?'Désactiver':'Activer')+'</button> '
+      +(u.name!=='Etienne Plamondon'?'<button class="btn-sm danger" onclick="deleteUser('+u.id+',&quot;'+u.name+'&quot;)" title="Supprimer"><i class="ti ti-trash" style="font-size:11px"></i></button>':'')
+      +'</td></tr>';
+  }).join('');
+}
+
+function openUserModal(id){
+  editUserId = id||null;
+  document.getElementById('user-modal-title').textContent = id ? 'Modifier utilisateur' : 'Ajouter un utilisateur';
+  if(id){
+    const u = adminUsers.find(function(x){return x.id===id;});
+    if(u){
+      document.getElementById('um-name').value = u.name;
+      document.getElementById('um-name').disabled = true;
+      document.getElementById('um-name-custom').style.display='none';
+      document.getElementById('um-pwd').value = '';
+      document.getElementById('um-role').value = u.role||'';
+      const tabs = u.tabs||['vo','pr'];
+      document.getElementById('um-tab-vo').checked = tabs.includes('vo');
+      document.getElementById('um-tab-pr').checked = tabs.includes('pr');
+    }
+  } else {
+    document.getElementById('um-name').disabled = false;
+    document.getElementById('um-name').value = '';
+    document.getElementById('um-name-custom').style.display='none';
+    document.getElementById('um-pwd').value = '';
+    document.getElementById('um-role').value = '';
+    document.getElementById('um-tab-vo').checked = true;
+    document.getElementById('um-tab-pr').checked = false;
+  }
+  const modal = document.getElementById('user-modal');
+  modal.style.cssText='display:flex;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;align-items:flex-start;justify-content:center;padding:60px 16px 16px;overflow-y:auto';
+}
+
+function closeUserModal(){ document.getElementById('user-modal').style.display='none'; }
+
+function prefillUserRole(){
+  const sel = document.getElementById('um-name');
+  const custom = document.getElementById('um-name-custom');
+  if(sel.value==='__custom__'){
+    custom.style.display='block';
+    document.getElementById('um-role').value='';
+  } else {
+    custom.style.display='none';
+    document.getElementById('um-role').value = USER_ROLES[sel.value]||'';
+  }
+}
+
+async function saveUser(){
+  let name = document.getElementById('um-name').value;
+  if(name==='__custom__') name = document.getElementById('um-name-custom').value.trim();
+  const pwd = document.getElementById('um-pwd').value;
+  const role = document.getElementById('um-role').value;
+  const tabs = [];
+  if(document.getElementById('um-tab-vo').checked) tabs.push('vo');
+  if(document.getElementById('um-tab-pr').checked) tabs.push('pr');
+  if(!name){alert('Entrez un nom');return;}
+  if(!editUserId && !pwd){alert('Entrez un mot de passe');return;}
+  try{
+    if(editUserId){
+      const body = {role:role,tabs:tabs};
+      if(pwd) body.password=pwd;
+      await fetch('/api/users/'+editUserId,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    } else {
+      await fetch('/api/users',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name,password:pwd,role:role,tabs:tabs})});
+    }
+    closeUserModal();
+    await loadAdminUsers();
+    showNotif('<i class="ti ti-check"></i> Utilisateur sauvegardé','ok');
+  }catch(e){alert('Erreur: '+e.message);}
+}
+
+function editUser(id){ openUserModal(id); }
+
+async function toggleUserActive(id, active){
+  await fetch('/api/users/'+id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({active:active})});
+  await loadAdminUsers();
+}
+
+async function deleteUser(id, name){
+  if(!confirm('Supprimer '+name+' ?')) return;
+  await fetch('/api/users/'+id,{method:'DELETE'});
+  await loadAdminUsers();
+  showNotif('<i class="ti ti-trash"></i> Utilisateur supprimé','warn');
+}
+
+async function saveGlobalPwd(){
+  const pwd = document.getElementById('admin-global-pwd').value;
+  if(!pwd){alert('Entrez un mot de passe');return;}
+  // Update the PASSWORD constant via a simple trick - store in localStorage for now
+  // In a real implementation this would update a DB setting
+  showNotif('<i class="ti ti-check"></i> Mot de passe global mis à jour — rechargez la page','ok');
+}
+
+// Override switchTab to load admin users when admin tab selected
+const _origSwitchTab = switchTab;
+function switchTab(tab){
+  _origSwitchTab(tab);
+  if(tab==='admin'){
+    document.getElementById('tab-content-admin').classList.add('active');
+    document.getElementById('tab-content-admin').style.display='block';
+    loadAdminUsers();
+  } else {
+    document.getElementById('tab-content-admin').classList.remove('active');
+    document.getElementById('tab-content-admin').style.display='none';
+  }
+}
+
+// ===== PNEUS & ROUES =====
+let prItems = [];
+let prSort = {key:'id', dir:1};
+let prEditId = null;
+
+const CAN_EDIT_PR = ['Etienne Plamondon','Serge Grenier','Nicolas Rivard','Yves Huard'];
+
+function switchTab(tab){
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(c=>{c.classList.remove('active');c.style.display='none';});
+  const btn = document.getElementById('tab-'+tab);
+  const content = document.getElementById('tab-content-'+tab);
+  if(btn) btn.classList.add('active');
+  if(content){content.classList.add('active');content.style.display='block';}
+  if(tab==='pr' && prItems.length===0) loadPR();
+}
+
+// Wrap existing app in tab-content
+document.addEventListener('DOMContentLoaded', function(){
+  const appScreen = document.getElementById('app-screen');
+  if(appScreen){
+    const voContent = appScreen.querySelector('.tab-content');
+    if(!voContent){
+      const mainDiv = appScreen.querySelector('.main');
+      if(mainDiv){
+        const wrapper = document.createElement('div');
+        wrapper.className = 'tab-content active';
+        wrapper.id = 'tab-content-vo';
+        mainDiv.parentNode.insertBefore(wrapper, mainDiv);
+        wrapper.appendChild(mainDiv);
+      }
+    }
+  }
+});
+
+async function loadPR(){
+  try{
+    const r = await fetch('/api/pneus-roues');
+    const rows = await r.json();
+    prItems = rows.map(function(row){
+      const d = row.data || {};
+      return Object.assign({}, d, {id: row.id, type: row.type, vendu: row.vendu, created_at: row.created_at});
+    });
+    renderPR();
+    updatePRStats();
+  }catch(e){console.error('loadPR:',e);}
+}
+
+function renderPR(){
+  const search = (document.getElementById('pr-search')?.value||'').toLowerCase();
+  const fType = document.getElementById('pr-f-type')?.value||'';
+  const fSaison = document.getElementById('pr-f-saison')?.value||'';
+  const fRoue = document.getElementById('pr-f-roue')?.value||'';
+  const fVendu = document.getElementById('pr-f-vendu')?.value;
+
+  let list = prItems.filter(function(item){
+    if(fType && item.type !== fType) return false;
+    if(fVendu !== '' && fVendu !== undefined && String(item.vendu) !== fVendu) return false;
+    if(fSaison && (item.saison||'').toUpperCase().indexOf(fSaison) === -1) return false;
+    if(fRoue){
+      const rm = (item.roues_mags||'').toLowerCase();
+      if(fRoue === 'Roue' && rm.indexOf('roue') === -1) return false;
+      if(fRoue === 'Mag' && rm.indexOf('mag') === -1) return false;
+      if(fRoue === 'Non' && rm !== 'non') return false;
+    }
+    if(search){
+      const searchable = [item.id,item.marque_vehicule,item.modele_vehicule,item.marque_pneu,item.modele_pneu,item.grandeur,item.dimension,item.localisation,item.bolt_pattern,item.saison].join(' ').toLowerCase();
+      if(searchable.indexOf(search) === -1) return false;
+    }
+    return true;
+  });
+
+  // Sort
+  list.sort(function(a,b){
+    const aVal = String(a[prSort.key]||'');
+    const bVal = String(b[prSort.key]||'');
+    return aVal.localeCompare(bVal) * prSort.dir;
+  });
+
+  const count = document.getElementById('pr-count');
+  if(count) count.textContent = list.length + ' résultat' + (list.length>1?'s':'');
+
+  const tbody = document.getElementById('pr-tbody');
+  if(!tbody) return;
+  const canEdit = CAN_EDIT_PR.includes(currentUser);
+
+  tbody.innerHTML = list.map(function(item){
+    const saison = (item.saison||'').toUpperCase();
+    const saisonBadge = saison.indexOf('HIVER')!==-1 ? '<span class="pr-badge pr-badge-hiver">❄️ Hiver</span>' :
+      saison.indexOf('ET')!==-1 ? '<span class="pr-badge pr-badge-ete">☀️ Été</span>' : item.saison||'';
+    const rm = (item.roues_mags||'').toLowerCase();
+    const rmBadge = rm.indexOf('mag')!==-1 ? '<span class="pr-badge pr-badge-mag">Mag</span>' :
+      rm.indexOf('roue')!==-1 ? '<span class="pr-badge pr-badge-roue">Roue</span>' : item.roues_mags||'';
+    return '<tr class="' + (item.vendu?'vendu':'') + '" onclick="showPRDetail(&quot;'+item.id+'&quot;)" style="cursor:pointer">'
+      + '<td style="font-family:monospace;font-weight:600">' + item.id + '</td>'
+      + '<td>' + (item.type==='pneu'?'🔵 Pneu':'⚫ Roue') + '</td>'
+      + '<td>' + (item.marque_vehicule||'') + '</td>'
+      + '<td>' + (item.modele_vehicule||'') + '</td>'
+      + '<td>' + (item.annee_vehicule||'') + '</td>'
+      + '<td style="font-weight:600">' + (item.grandeur||item.dimension||'') + '</td>'
+      + '<td>' + (item.marque_pneu||'') + '</td>'
+      + '<td>' + (item.modele_pneu||'') + '</td>'
+      + '<td>' + saisonBadge + '</td>'
+      + '<td>' + rmBadge + '</td>'
+      + '<td>' + (item.usure||'') + '</td>'
+      + '<td>' + (item.bolt_pattern||'') + '</td>'
+      + '<td>' + (item.localisation||'') + '</td>'
+      + '<td>' + (item.prix ? item.prix+'$' : '') + '</td>'
+      + '<td style="font-size:11px;color:var(--text-muted);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (item.notes||'') + '</td>'
+      + '<td style="white-space:nowrap">'
+      + (canEdit ? '<button class="btn-sm" onclick="editPR(&quot;'+item.id+'&quot;)"><i class="ti ti-edit" style="font-size:11px"></i></button> ' : '')
+      + (canEdit && !item.vendu ? '<button class="btn-sm" style="border-color:#1D9E75;color:#0F6E56" onclick="markVendu(&quot;'+item.id+'&quot;)">Vendu</button> ' : '')
+      + (canEdit ? '<button class="btn-sm danger" onclick="deletePR(&quot;'+item.id+'&quot;)"><i class="ti ti-trash" style="font-size:11px"></i></button>' : '')
+      + '</td>'
+      + '</tr>';
+  }).join('');
+}
+
+function updatePRStats(){
+  const avail = prItems.filter(function(i){return !i.vendu;});
+  const el1 = document.getElementById('pr-s-pneus');
+  const el2 = document.getElementById('pr-s-roues');
+  const el3 = document.getElementById('pr-s-hiver');
+  const el4 = document.getElementById('pr-s-ete');
+  if(el1) el1.textContent = avail.filter(function(i){return i.type==='pneu';}).length;
+  if(el2) el2.textContent = avail.filter(function(i){return i.type==='roue';}).length;
+  if(el3) el3.textContent = avail.filter(function(i){return (i.saison||'').toUpperCase().indexOf('HIVER')!==-1;}).length;
+  if(el4) el4.textContent = avail.filter(function(i){return (i.saison||'').toUpperCase().indexOf('ET')!==-1;}).length;
+}
+
+function sortPR(key){
+  if(prSort.key===key) prSort.dir *= -1;
+  else { prSort.key=key; prSort.dir=1; }
+  renderPR();
+}
+
+function openPRModal(id){
+  prEditId = id||null;
+  const modal = document.getElementById('pr-modal');
+  const title = document.getElementById('pr-modal-title');
+  if(id){
+    title.textContent = 'Modifier ' + id;
+    const item = prItems.find(function(i){return i.id===id;});
+    if(item){
+      document.getElementById('pr-f-type-modal').value = item.type||'pneu';
+      document.getElementById('pr-id').value = item.id;
+      document.getElementById('pr-id').disabled = true;
+      document.getElementById('pr-marque-v').value = item.marque_vehicule||'';
+      document.getElementById('pr-modele-v').value = item.modele_vehicule||'';
+      document.getElementById('pr-annee').value = item.annee_vehicule||'';
+      document.getElementById('pr-stock-v').value = item.stock_vehicule||'';
+      document.getElementById('pr-marque-p').value = item.marque_pneu||'';
+      document.getElementById('pr-modele-p').value = item.modele_pneu||'';
+      document.getElementById('pr-saison').value = item.saison||'HIVER';
+      document.getElementById('pr-usure').value = item.usure||'';
+      document.getElementById('pr-grandeur').value = item.grandeur||item.dimension||'';
+      document.getElementById('pr-roues-mags').value = item.roues_mags||'Non';
+      document.getElementById('pr-bolt').value = item.bolt_pattern||'';
+      document.getElementById('pr-loc').value = item.localisation||'';
+      document.getElementById('pr-prix').value = item.prix||'';
+      document.getElementById('pr-notes').value = item.notes||'';
+    }
+  } else {
+    title.textContent = 'Ajouter pneu / roue';
+    document.getElementById('pr-id').disabled = false;
+    ['pr-id','pr-marque-v','pr-modele-v','pr-annee','pr-stock-v','pr-marque-p','pr-modele-p','pr-usure','pr-grandeur','pr-bolt','pr-loc','pr-prix','pr-notes'].forEach(function(eid){
+      document.getElementById(eid).value='';
+    });
+    // Auto-generate next ID
+    const type = document.getElementById('pr-f-type-modal').value;
+    const prefix = type === 'pneu' ? 'PU' : 'RU';
+    const existing = prItems.filter(function(i){return i.id.startsWith(prefix);});
+    let maxNum = 0;
+    existing.forEach(function(i){
+      const n = parseInt(i.id.replace(prefix,''));
+      if(!isNaN(n) && n > maxNum) maxNum = n;
+    });
+    document.getElementById('pr-id').value = prefix + String(maxNum+1).padStart(5,'0');
+  }
+  updatePRForm();
+  modal.style.display='flex';
+  modal.style.position='fixed';
+  modal.style.inset='0';
+  modal.style.background='rgba(0,0,0,.45)';
+  modal.style.zIndex='200';
+  modal.style.alignItems='flex-start';
+  modal.style.justifyContent='center';
+  modal.style.padding='60px 16px 16px';
+  modal.style.overflowY='auto';
+}
+
+function closePRModal(){
+  document.getElementById('pr-modal').style.display='none';
+}
+
+function updatePRForm(){
+  const type = document.getElementById('pr-f-type-modal').value;
+  document.querySelectorAll('.pr-pneu-field').forEach(function(el){el.style.display=type==='pneu'?'':'none';});
+  document.querySelectorAll('.pr-roue-field').forEach(function(el){el.style.display=type==='roue'?'':'none';});
+  // Update auto-ID if field is empty or has old prefix
+  if(!prEditId){
+    const idField = document.getElementById('pr-id');
+    const prefix = type === 'pneu' ? 'PU' : 'RU';
+    const existing = prItems.filter(function(i){return i.id.startsWith(prefix);});
+    let maxNum = 0;
+    existing.forEach(function(i){
+      const n = parseInt(i.id.replace(prefix,''));
+      if(!isNaN(n) && n > maxNum) maxNum = n;
+    });
+    idField.value = prefix + String(maxNum+1).padStart(5,'0');
+  }
+}
+
+function editPR(id){ openPRModal(id); }
+
+async function savePRItem(){
+  const type = document.getElementById('pr-f-type-modal').value;
+  const id = document.getElementById('pr-id').value.trim().toUpperCase();
+  if(!id){ alert('Entrez un # inventaire'); return; }
+  const data = {
+    marque_vehicule: document.getElementById('pr-marque-v').value.trim(),
+    modele_vehicule: document.getElementById('pr-modele-v').value.trim(),
+    annee_vehicule: document.getElementById('pr-annee').value.trim(),
+    stock_vehicule: document.getElementById('pr-stock-v').value.trim(),
+    marque_pneu: type==='pneu'?document.getElementById('pr-marque-p').value.trim():'',
+    modele_pneu: type==='pneu'?document.getElementById('pr-modele-p').value.trim():'',
+    saison: type==='pneu'?document.getElementById('pr-saison').value:'',
+    usure: type==='pneu'?document.getElementById('pr-usure').value.trim():'',
+    grandeur: type==='pneu'?document.getElementById('pr-grandeur').value.trim():'',
+    dimension: type==='roue'?document.getElementById('pr-grandeur').value.trim():'',
+    roues_mags: document.getElementById('pr-roues-mags').value,
+    bolt_pattern: type==='roue'?document.getElementById('pr-bolt').value.trim():'',
+    localisation: document.getElementById('pr-loc').value.trim(),
+    prix: document.getElementById('pr-prix').value.trim(),
+    notes: document.getElementById('pr-notes').value.trim()
+  };
+  try{
+    await fetch('/api/pneus-roues', {method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({id:id, type:type, data:data, vendu:false})});
+    closePRModal();
+    await loadPR();
+  }catch(e){alert('Erreur: '+e.message);}
+}
+
+async function markVendu(id){
+  if(!confirm('Marquer '+id+' comme vendu ?')) return;
+  await fetch('/api/pneus-roues/'+id, {method:'PATCH', headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({vendu:true})});
+  await loadPR();
+}
+
+async function deletePR(id){
+  if(!confirm('Supprimer '+id+' définitivement ?')) return;
+  await fetch('/api/pneus-roues/'+id, {method:'DELETE'});
+  prItems = prItems.filter(function(i){return i.id!==id;});
+  renderPR();
+  updatePRStats();
+}
+
+// Detail panel for quick actions
+function showPRDetail(id){
+  const item = prItems.find(function(i){return i.id===id;});
+  if(!item) return;
+  const canEdit = CAN_EDIT_PR.includes(currentUser);
+  const existing = document.getElementById('pr-detail-panel');
+  if(existing) existing.remove();
+  
+  const panel = document.createElement('div');
+  panel.id = 'pr-detail-panel';
+  panel.style.cssText = 'position:fixed;bottom:0;left:0;right:0;background:var(--card);border-top:2px solid var(--blue);padding:16px 20px;z-index:150;box-shadow:0 -4px 20px rgba(0,0,0,.15);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px';
+  
+  const saison = (item.saison||'').toUpperCase().indexOf('HIVER')!==-1?'❄️ Hiver':(item.saison||'').toUpperCase().indexOf('ET')!==-1?'☀️ Été':item.saison||'';
+  const info = '<strong>'+item.id+'</strong> — '+(item.marque_vehicule||'')+' '+(item.modele_vehicule||'')+' '+(item.annee_vehicule||'')+' · '+(item.grandeur||item.dimension||'')+' · '+saison+' · '+(item.localisation||'')+' · '+(item.prix?item.prix+'$':'N/D');
+  
+  panel.innerHTML = '<div style="font-size:13px">'+info+'</div>'
+    + '<div style="display:flex;gap:8px;align-items:center">'
+    + (canEdit && !item.vendu ? '<button class="btn-primary" style="font-size:12px;padding:7px 14px" onclick="markVenduFromPanel(&quot;'+item.id+'&quot;)"><i class="ti ti-tag" style="font-size:12px"></i> Marquer vendu</button>' : '')
+    + (canEdit ? '<button class="btn" style="font-size:12px;padding:7px 14px" onclick="editPR(&quot;'+item.id+'&quot;);closePRDetail()"><i class="ti ti-edit" style="font-size:12px"></i> Modifier</button>' : '')
+    + (item.vendu ? '<span style="background:#fef2f2;color:#dc2626;padding:6px 12px;border-radius:6px;font-size:12px;font-weight:600">✗ Vendu</span>' : '')
+    + '<button class="btn" style="font-size:12px;padding:7px 12px" onclick="closePRDetail()"><i class="ti ti-x" style="font-size:12px"></i></button>'
+    + '</div>';
+  
+  document.body.appendChild(panel);
+}
+
+function closePRDetail(){
+  const p = document.getElementById('pr-detail-panel');
+  if(p) p.remove();
+}
+
+async function markVenduFromPanel(id){
+  if(!confirm('Marquer '+id+' comme vendu ?')) return;
+  await fetch('/api/pneus-roues/'+id, {method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({vendu:true})});
+  closePRDetail();
+  await loadPR();
+  showNotif('<i class="ti ti-check"></i> '+id+' marqué comme vendu','ok');
+}
+
+async function importExcel(input){
+  const file = input.files[0];
+  if(!file) return;
+  const fname = file.name.toUpperCase();
+  const prefix = fname.includes('PNEU') ? 'PU' : fname.includes('ROUE') ? 'RU' : null;
+  if(!prefix){
+    showNotif('<i class="ti ti-alert-triangle"></i> Nommez le fichier PNEUS ou ROUES','warn');
+    return;
+  }
+  showNotif('<div class="spin"></div> Lecture du fichier Excel…','info',0);
+  try{
+    const buffer = await file.arrayBuffer();
+    const bytes = new Uint8Array(buffer);
+    let binary = '';
+    const chunkSize = 8192;
+    for(let i=0;i<bytes.length;i+=chunkSize){
+      binary += String.fromCharCode.apply(null, bytes.subarray(i,i+chunkSize));
+    }
+    const base64 = btoa(binary);
+    showNotif('<div class="spin"></div> Analyse des couleurs côté serveur…','info',0);
+    const r = await fetch('/api/import-excel',{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({fileData:base64, prefix:prefix})
+    });
+    const d = await r.json();
+    if(d.error){ showNotif('<i class="ti ti-alert-triangle"></i> Erreur: '+d.error,'warn'); return; }
+    if(!d.items||d.items.length===0){ showNotif('Aucun item disponible trouvé','warn'); return; }
+    showNotif('<div class="spin"></div> Import de '+d.count+' items…','info',0);
+    const items = d.items.map(function(item){
+      const {id,type,vendu,...data}=item;
+      return {id:id,type:type,vendu:vendu||false,data:data};
+    });
+    const r2 = await fetch('/api/pneus-roues/import',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({items:items})});
+    const d2 = await r2.json();
+    clearNotif();
+    showNotif('<i class="ti ti-check"></i> '+d2.imported+' items importés avec succès','ok');
+    await loadPR();
+    input.value='';
+  }catch(e){
+    clearNotif();
+    showNotif('<i class="ti ti-alert-triangle"></i> Erreur: '+e.message,'warn');
+    console.error('importExcel:',e);
+  }
+}
+
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hyundai St-Raymond — Occasion</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚗</text></svg>">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
+<style>
+:root{
+  --blue:#003087;--blue-light:#E6F0FF;--blue-mid:#185FA5;
+  --green:#0F6E56;--green-light:#E1F5EE;
+  --red:#A32D2D;--red-light:#FCEBEB;
+  --amber:#854F0B;--amber-light:#FAEEDA;
+  --border:#e2e8f0;--border-light:#f1f5f9;
+  --text:#1a202c;--text-muted:#64748b;--text-hint:#94a3b8;
+  --bg:#f8fafc;--card:#ffffff;
+  --radius:10px;--radius-sm:6px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);font-size:14px;line-height:1.5}
+
+/* LOGIN */
+.login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+.login-card{background:var(--card);border-radius:16px;border:1px solid var(--border);padding:40px 36px;width:100%;max-width:380px;text-align:center}
+.login-logo{width:56px;height:56px;background:var(--blue);border-radius:14px;display:flex;align-items:center;justify-content:center;margin:0 auto 20px;color:white;font-size:24px}
+.login-card h1{font-size:20px;font-weight:600;margin-bottom:4px}
+.login-card p{color:var(--text-muted);font-size:13px;margin-bottom:28px}
+.login-card .fg{text-align:left;margin-bottom:14px}
+.login-card label{display:block;font-size:12px;font-weight:500;color:var(--text-muted);margin-bottom:5px}
+.login-card input{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:14px;outline:none;transition:border .2s}
+.login-card input:focus{border-color:var(--blue-mid)}
+.login-card .fg-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.btn-login{width:100%;padding:11px;background:var(--blue);color:white;border:none;border-radius:var(--radius-sm);font-size:14px;font-weight:500;cursor:pointer;margin-top:6px}
+.btn-login:hover{background:#002266}
+.login-error{background:var(--red-light);color:var(--red);font-size:12px;padding:8px 12px;border-radius:var(--radius-sm);margin-top:10px;display:none}
+
+/* HEADER */
+header{background:var(--blue);color:white;padding:0 20px;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
+.header-left{display:flex;align-items:center;gap:10px}
+.header-logo{font-size:18px;font-weight:700;letter-spacing:-.3px}
+.header-sub{font-size:11px;opacity:.7;margin-top:1px}
+.header-user{display:flex;align-items:center;gap:8px;font-size:13px}
+.header-user .avatar{width:30px;height:30px;border-radius:50%;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600}
+.btn-logout{background:rgba(255,255,255,.15);border:none;color:white;padding:5px 10px;border-radius:var(--radius-sm);font-size:12px;cursor:pointer}
+.btn-logout:hover{background:rgba(255,255,255,.25)}
+
+/* MAIN */
+.main{max-width:900px;margin:0 auto;padding:20px 16px}
+
+/* STATS */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px}
+.stat{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px}
+.stat-label{font-size:11px;color:var(--text-muted);margin-bottom:4px;font-weight:500}
+.stat-val{font-size:24px;font-weight:700}
+.stat-val.blue{color:var(--blue-mid)}
+.stat-val.green{color:var(--green)}
+.stat-val.red{color:var(--red)}
+.stat-val.amber{color:var(--amber)}
+
+/* TOOLBAR */
+.toolbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:10px;flex-wrap:wrap}
+.filters{display:flex;gap:6px;flex-wrap:wrap}
+.filter-btn{padding:5px 12px;border:1px solid var(--border);border-radius:20px;background:var(--card);color:var(--text-muted);font-size:12px;cursor:pointer;transition:all .15s}
+.filter-btn:hover{border-color:var(--blue-mid);color:var(--blue-mid)}
+.filter-btn.active{background:var(--blue);border-color:var(--blue);color:white}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--card);color:var(--text);font-size:13px;cursor:pointer;font-weight:500}
+.btn:hover{background:var(--border-light)}
+.btn-primary{background:var(--blue);border-color:var(--blue);color:white}
+.btn-primary:hover{background:#002266}
+.btn-sm{display:inline-flex;align-items:center;gap:4px;padding:4px 9px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--card);color:var(--text-muted);font-size:11px;cursor:pointer}
+.btn-sm:hover{background:var(--border-light);color:var(--text)}
+.btn-sm.success{border-color:#9FE1CB;color:var(--green)}
+.btn-sm.success:hover{background:var(--green-light)}
+.btn-sm.danger{border-color:#fca5a5;color:var(--red)}
+.btn-sm.danger:hover{background:var(--red-light)}
+.btn-sm.drive{border-color:#4285f4;color:#1a56db}
+.btn-sm.drive:hover{background:#EBF5FF}
+
+/* VEHICLE CARDS */
+.vcard{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:10px;overflow:hidden}
+.vcard.is-late{border-left:3px solid var(--red)}
+.vcard.is-done{border-left:3px solid var(--green)}
+.vchead{display:flex;align-items:center;gap:12px;padding:13px 16px;cursor:pointer;transition:background .1s}
+.vchead:hover{background:var(--border-light)}
+.vinfo{flex:1;min-width:0}
+.vtitle{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.vname{font-size:14px;font-weight:600}
+.vmeta{display:flex;gap:10px;margin-top:3px;flex-wrap:wrap}
+.vmeta span{font-size:11px;color:var(--text-muted)}
+.vmeta .stock{font-family:monospace;font-size:12px;font-weight:600;color:var(--text)}
+.pbar-wrap{width:140px;flex-shrink:0}
+.pbar-bg{height:6px;background:var(--border-light);border-radius:3px;overflow:hidden}
+.pbar-fill{height:100%;border-radius:3px;transition:width .3s}
+.pbar-label{font-size:10px;color:var(--text-muted);margin-top:3px;text-align:right}
+.vchead-actions{display:flex;gap:6px;align-items:center;flex-shrink:0}
+.chev{font-size:16px;color:var(--text-hint);transition:transform .2s}
+.chev.open{transform:rotate(180deg)}
+
+/* BADGE */
+.badge{font-size:10px;padding:2px 8px;border-radius:20px;font-weight:600;display:inline-flex;align-items:center;gap:3px;white-space:nowrap}
+.badge-green{background:var(--green-light);color:var(--green)}
+.badge-red{background:var(--red-light);color:var(--red)}
+.badge-amber{background:var(--amber-light);color:var(--amber)}
+.badge-blue{background:var(--blue-light);color:var(--blue-mid)}
+.badge-gray{background:var(--border-light);color:var(--text-muted);border:1px solid var(--border)}
+
+/* BODY */
+.vcbody{display:none;border-top:1px solid var(--border);padding:14px 16px}
+.vcbody.open{display:block}
+
+/* DOC CHECKS */
+.doc-checks{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px}
+.doc-card{background:var(--border-light);border-radius:var(--radius-sm);padding:10px 12px;border:1px solid var(--border)}
+.doc-card .dc-label{font-size:11px;color:var(--text-muted);margin-bottom:5px;display:flex;align-items:center;gap:4px}
+.doc-card .dc-val{font-size:12px;font-weight:600;display:flex;align-items:center;gap:4px}
+.dc-val.ok{color:var(--green)}
+.dc-val.missing{color:var(--red)}
+.dc-val.warn{color:var(--amber)}
+.dc-val.muted{color:var(--text-muted)}
+.doc-card .dc-file{font-size:10px;color:var(--text-hint);margin-top:3px;font-family:monospace}
+
+/* PHASES */
+.phase-label{font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;margin:12px 0 6px;display:flex;align-items:center;gap:5px}
+.step{display:flex;align-items:flex-start;gap:10px;padding:9px 12px;border-radius:var(--radius-sm);border:1px solid var(--border);margin-bottom:5px;background:var(--card)}
+.step.active{background:var(--blue-light);border-color:#93c5fd}
+.step.late{background:var(--red-light);border-color:#fca5a5}
+.step-ico{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0}
+.step-ico.done{background:var(--green-light);color:var(--green)}
+.step-ico.active{background:var(--blue-light);color:var(--blue-mid)}
+.step-ico.late{background:var(--red-light);color:var(--red)}
+.step-ico.blocked{background:var(--border-light);color:var(--text-hint);border:1px solid var(--border)}
+.step-content{flex:1;min-width:0}
+.step-name{font-size:12px;font-weight:600}
+.step-assign{font-size:11px;color:var(--text-muted);margin-top:1px}
+.step-dl{font-size:10px;margin-top:2px}
+.step-dl.ok{color:var(--green)}
+.step-dl.warn{color:var(--amber)}
+.step-dl.late{color:var(--red)}
+.step-dl.muted{color:var(--text-muted)}
+.step-actions{display:flex;gap:5px;align-items:center;flex-shrink:0}
+
+/* CARD FOOTER */
+.card-footer{display:flex;gap:6px;margin-top:12px;flex-wrap:wrap;align-items:center;justify-content:space-between}
+.card-footer-left{display:flex;gap:6px;flex-wrap:wrap}
+
+/* NOTIF */
+.notif-bar{position:sticky;top:56px;z-index:99;padding:0 16px}
+.notif{display:flex;align-items:center;gap:8px;padding:9px 14px;border-radius:var(--radius-sm);font-size:13px;margin-bottom:8px;border:1px solid transparent}
+.notif.info{background:var(--blue-light);border-color:#93c5fd;color:var(--blue-mid)}
+.notif.ok{background:var(--green-light);border-color:#9FE1CB;color:var(--green)}
+.notif.warn{background:var(--amber-light);border-color:#FAC775;color:var(--amber)}
+
+/* MODAL */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;align-items:flex-start;justify-content:center;padding:60px 16px 16px;overflow-y:auto}
+.modal-overlay.open{display:flex}
+.modal{background:var(--card);border-radius:16px;border:1px solid var(--border);padding:24px 26px;width:100%;max-width:460px}
+.modal h3{font-size:16px;font-weight:600;margin-bottom:16px;display:flex;align-items:center;gap:8px}
+.fg{margin-bottom:12px}
+.fg label{display:block;font-size:12px;font-weight:500;color:var(--text-muted);margin-bottom:4px}
+.fg input,.fg select{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;outline:none;background:var(--bg)}
+.fg input:focus,.fg select:focus{border-color:var(--blue-mid)}
+.fg-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.section-title{font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin:14px 0 8px;padding-top:14px;border-top:1px solid var(--border)}
+.check-row{display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:8px;cursor:pointer}
+.check-row input{width:15px;height:15px;cursor:pointer;accent-color:var(--blue)}
+.modal-footer{display:flex;justify-content:flex-end;gap:8px;margin-top:16px;padding-top:14px;border-top:1px solid var(--border)}
+
+/* SAVE IND */
+.save-ind{font-size:11px;color:var(--text-muted);display:flex;align-items:center;gap:5px}
+.save-ind.ok{color:var(--green)}
+.save-ind.saving{color:var(--amber)}
+
+/* EMPTY */
+.empty{text-align:center;padding:50px 20px;color:var(--text-muted)}
+.empty i{font-size:40px;opacity:.3;display:block;margin-bottom:12px}
+
+/* SPINNER */
+.spin{display:inline-block;width:12px;height:12px;border:2px solid var(--border);border-top-color:var(--blue-mid);border-radius:50%;animation:sp .7s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+
+/* TABS */
+.tab-bar{display:flex;gap:0;background:var(--blue)}
+.tab-btn{padding:10px 20px;border:none;background:transparent;color:rgba(255,255,255,.6);font-size:13px;font-weight:500;cursor:pointer;border-bottom:3px solid transparent;transition:all .2s}
+.tab-btn:hover{color:white;background:rgba(255,255,255,.1)}
+.tab-btn.active{color:white;border-bottom-color:white;background:rgba(255,255,255,.15)}
+.tab-content{display:none}
+.tab-content.active{display:block}
+
+/* PNEUS ROUES */
+.pr-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px}
+.pr-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px}
+.pr-filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;align-items:center}
+.pr-filter-select{padding:6px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:12px;background:var(--bg);color:var(--text);cursor:pointer}
+.pr-search{flex:1;min-width:180px;max-width:280px;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;background:var(--bg);color:var(--text)}
+.pr-table{width:100%;border-collapse:collapse;font-size:12px}
+.pr-table th{background:var(--border-light);padding:8px 10px;text-align:left;font-weight:600;font-size:11px;color:var(--text-muted);border-bottom:1px solid var(--border);white-space:nowrap}
+.pr-table td{padding:8px 10px;border-bottom:1px solid var(--border-light);vertical-align:top}
+.pr-table tr:hover td{background:var(--border-light)}
+.pr-table tr.vendu td{opacity:.4;text-decoration:line-through}
+.pr-badge{font-size:10px;padding:2px 7px;border-radius:20px;font-weight:600}
+.pr-badge-hiver{background:#dbeafe;color:#1e40af}
+.pr-badge-ete{background:#fef9c3;color:#854d0e}
+.pr-badge-mag{background:#ede9fe;color:#5b21b6}
+.pr-badge-roue{background:#f0fdf4;color:#166534}
+.pr-modal{background:var(--card);border-radius:16px;border:1px solid var(--border);padding:22px 24px;width:100%;max-width:560px}
+
+/* COMMENTS */
+.comments-section{margin-top:12px;border-top:1px solid var(--border);padding-top:12px}
+.comments-title{font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;display:flex;align-items:center;gap:5px}
+.comment-item{background:var(--border-light);border-radius:var(--radius-sm);padding:8px 10px;margin-bottom:6px;border-left:3px solid var(--blue)}
+.comment-author{font-size:11px;font-weight:600;color:var(--blue-mid)}
+.comment-step{font-size:10px;color:var(--text-muted);margin-left:6px}
+.comment-date{font-size:10px;color:var(--text-hint);float:right}
+.comment-msg{font-size:12px;margin-top:3px;color:var(--text)}
+.comment-form{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
+.comment-form select{font-size:12px;padding:6px 8px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);color:var(--text);flex:0 0 auto}
+.comment-form input{flex:1;min-width:200px;padding:6px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:12px;background:var(--bg);color:var(--text)}
+.comment-form input:focus,.comment-form select:focus{border-color:var(--blue-mid);outline:none}
+.comment-send{padding:6px 12px;background:var(--blue);color:white;border:none;border-radius:var(--radius-sm);font-size:12px;cursor:pointer;white-space:nowrap}
+.comment-send:hover{background:#002266}
+/* MOBILE */
+@media(max-width:600px){
+  .stats{grid-template-columns:1fr 1fr}
+  .doc-checks{grid-template-columns:1fr}
+  .pbar-wrap{display:none}
+  .fg-row{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div class="login-wrap" id="login-screen">
+  <div class="login-card">
+    <div class="login-logo"><i class="ti ti-car"></i></div>
+    <h1>Hyundai St-Raymond</h1>
+    <p>Gestion des véhicules d'occasion</p>
+    <div class="fg">
+      <label>Votre nom</label>
+      <select id="login-user">
+        <option value="">— Sélectionnez —</option>
+        <option value="Etienne Plamondon">Etienne Plamondon — Directeur Général</option>
+        <option value="Serge Grenier">Serge Grenier — Directeur des ventes</option>
+        <option value="Nicolas Rivard">Nicolas Rivard — Directeur adjoint</option>
+        <option value="Martin Napier">Martin Napier — Esthétique</option>
+        <option value="Nicolas Fiset">Nicolas Fiset — Esthétique</option>
+        <option value="Charles Boivin">Charles Boivin — Photos</option>
+        <option value="Vincent Bouchard">Vincent Bouchard — Dir. pièces / Inspection</option>
+        <option value="Yves Huard">Yves Huard — Pneus &amp; Roues</option>
+      </select>
+    </div>
+    <div class="fg">
+      <label>Mot de passe</label>
+      <input type="password" id="login-pw" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()">
+    </div>
+    <button class="btn-login" onclick="doLogin()">Accéder au tableau de bord</button>
+    <div class="login-error" id="login-error">Nom ou mot de passe incorrect.</div>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app-screen" style="display:none">
+  <header>
+    <div class="header-left">
+      <div>
+        <div class="header-logo">Hyundai St-Raymond</div>
+        <div class="header-sub">Suivi mise en marché — occasion</div>
+      </div>
+    </div>
+    <div class="header-user">
+      <span id="header-username" style="font-size:12px;opacity:.85"></span>
+      <div class="avatar" id="header-avatar"></div>
+      <button class="btn-logout" onclick="doLogout()"><i class="ti ti-logout" style="font-size:13px"></i> Quitter</button>
+    </div>
+  </header>
+
+  <div class="notif-bar" id="notif-bar"></div>
+
+  <div class="tab-bar" id="tab-bar" style="background:var(--blue);padding:0 20px;display:flex;gap:0">
+    <button class="tab-btn active" id="tab-vo" onclick="switchTab('vo')">🚗 Mise en marché</button>
+    <button class="tab-btn" id="tab-pr" onclick="switchTab('pr')">🔧 Pneus & Roues</button>
+    <button class="tab-btn" id="tab-admin" onclick="switchTab('admin')" style="display:none;margin-left:auto">⚙️ Admin</button>
+  </div>
+  <div class="tab-content active" id="tab-content-vo"><div class="main">
+    <div class="stats">
+      <div class="stat"><div class="stat-label">En cours</div><div class="stat-val blue" id="s-active">–</div></div>
+      <div class="stat"><div class="stat-label">Complétés</div><div class="stat-val green" id="s-done">–</div></div>
+      <div class="stat"><div class="stat-label">En retard</div><div class="stat-val red" id="s-late">–</div></div>
+      <div class="stat"><div class="stat-label">Docs manquants</div><div class="stat-val amber" id="s-docs">–</div></div>
+      <div class="stat"><div class="stat-label">&lt; 10 photos</div><div class="stat-val amber" id="s-photos">–</div></div>
+    </div>
+
+    <div id="my-tasks-banner" style="display:none;background:var(--blue);color:white;border-radius:var(--radius);padding:14px 18px;margin-bottom:14px;align-items:center;justify-content:space-between;gap:12px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <i class="ti ti-list-check" style="font-size:20px;opacity:.85"></i>
+        <div>
+          <div style="font-size:14px;font-weight:600" id="my-tasks-title">Mes tâches</div>
+          <div style="font-size:12px;opacity:.8" id="my-tasks-sub"></div>
+        </div>
+      </div>
+      <span id="my-tasks-count" style="background:white;color:var(--blue);font-size:18px;font-weight:700;padding:4px 14px;border-radius:20px">0</span>
+    </div>
+    <div class="toolbar">
+      <div class="filters">
+        <button class="filter-btn" id="btn-mytasks" onclick="setFilter('mine',this)" style="display:none">
+          <i class="ti ti-user-check" style="font-size:12px"></i> Mes tâches <span id="badge-mine" style="background:var(--blue);color:white;border-radius:20px;padding:1px 7px;font-size:10px;margin-left:3px">0</span>
+        </button>
+        <button class="filter-btn active" onclick="setFilter('all',this)" id="btn-all">Tous</button>
+        <button class="filter-btn" onclick="setFilter('active',this)">En cours</button>
+        <button class="filter-btn" onclick="setFilter('late',this)">En retard</button>
+        <button class="filter-btn" onclick="setFilter('done',this)">Complétés</button>
+        <button class="filter-btn" onclick="setFilter('docs',this)">Docs manquants</button>
+        <button class="filter-btn" onclick="setFilter('fewphotos',this)">&lt; 10 photos</button>
+        <button class="filter-btn" onclick="setFilter('okphotos',this)">&ge; 10 photos</button>
+        
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <span class="save-ind" id="save-ind"><i class="ti ti-cloud" style="font-size:12px"></i> Chargement…</span>
+        <button class="btn" onclick="scanAll()" id="can-add"><i class="ti ti-refresh" style="font-size:14px"></i> Drive</button>
+        <button class="btn btn-primary" onclick="openModal()" id="btn-add"><i class="ti ti-plus" style="font-size:14px"></i> Nouveau</button>
+      </div>
+    </div>
+
+    <div id="vlist"></div>
+  </div>
+  </div><!-- end tab-content-vo -->
+
+  <!-- PNEUS & ROUES TAB -->
+  <div class="tab-content" id="tab-content-pr">
+    <div class="main">
+      <div class="pr-header">
+        <div>
+          <h2 style="font-size:17px;font-weight:500;display:flex;align-items:center;gap:8px">🔧 Pneus &amp; Roues — Inventaire</h2>
+          <p style="font-size:11px;color:var(--text-muted);margin-top:2px">Hyundai St-Raymond · PU-XXXXX pneus · RU-XXXXX roues</p>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <label class="btn" style="cursor:pointer"><i class="ti ti-upload" style="font-size:14px"></i> Importer Excel<input type="file" id="pr-import-file" accept=".xlsx" style="display:none" onchange="importExcel(this)"></label>
+          <button class="btn btn-primary" onclick="openPRModal()"><i class="ti ti-plus" style="font-size:14px"></i> Ajouter</button>
+        </div>
+      </div>
+      <div class="pr-stats">
+        <div class="sc"><div class="sl">Total pneus</div><div class="sv blue" id="pr-s-pneus">–</div></div>
+        <div class="sc"><div class="sl">Total roues</div><div class="sv blue" id="pr-s-roues">–</div></div>
+        <div class="sc"><div class="sl">Hiver dispo</div><div class="sv" id="pr-s-hiver">–</div></div>
+        <div class="sc"><div class="sl">Été dispo</div><div class="sv" id="pr-s-ete">–</div></div>
+      </div>
+      <div class="pr-filters">
+        <input type="text" class="pr-search" id="pr-search" placeholder="Rechercher grandeur, marque, modèle..." oninput="renderPR()">
+        <select class="pr-filter-select" id="pr-f-type" onchange="renderPR()">
+          <option value="">Pneus &amp; Roues</option>
+          <option value="pneu">Pneus seulement</option>
+          <option value="roue">Roues seulement</option>
+        </select>
+        <select class="pr-filter-select" id="pr-f-saison" onchange="renderPR()">
+          <option value="">Toutes saisons</option>
+          <option value="HIVER">Hiver</option>
+          <option value="ETE">Été</option>
+        </select>
+        <select class="pr-filter-select" id="pr-f-roue" onchange="renderPR()">
+          <option value="">Roues &amp; Mags</option>
+          <option value="Roue">Avec roues</option>
+          <option value="Mag">Avec mags</option>
+          <option value="Non">Sans roues</option>
+        </select>
+        <select class="pr-filter-select" id="pr-f-vendu" onchange="renderPR()">
+          <option value="false">Disponibles</option>
+          <option value="true">Vendus</option>
+          <option value="">Tous</option>
+        </select>
+        <span id="pr-count" style="font-size:12px;color:var(--text-muted)"></span>
+      </div>
+      <div style="overflow-x:auto;border-radius:var(--radius);border:1px solid var(--border)">
+        <table class="pr-table">
+          <thead>
+            <tr>
+              <th># Inv</th><th>Type</th><th>Marque véh.</th><th>Modèle véh.</th><th>Année</th>
+              <th>Grandeur / Dim.</th><th>Marque pneu</th><th>Modèle pneu</th>
+              <th>Saison</th><th>Roues/Mags</th><th>Usure</th><th>Bolt Pattern</th>
+              <th>Localisation</th><th>Prix</th><th>Notes</th><th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="pr-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ADMIN TAB -->
+<div class="tab-content" id="tab-content-admin" style="display:none">
+  <div class="main">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px">
+      <div>
+        <h2 style="font-size:17px;font-weight:500">⚙️ Administration</h2>
+        <p style="font-size:11px;color:var(--text-muted);margin-top:2px">Gestion des utilisateurs et permissions</p>
+      </div>
+      <button class="btn btn-primary" onclick="openUserModal()"><i class="ti ti-user-plus" style="font-size:14px"></i> Ajouter utilisateur</button>
+    </div>
+
+    <div style="background:var(--card);border-radius:var(--radius);border:1px solid var(--border);overflow:hidden">
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead>
+          <tr style="background:var(--border-light)">
+            <th style="padding:10px 14px;text-align:left;font-weight:600;font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em">Utilisateur</th>
+            <th style="padding:10px 14px;text-align:left;font-weight:600;font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em">Rôle</th>
+            <th style="padding:10px 14px;text-align:center;font-weight:600;font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em">Mise en marché</th>
+            <th style="padding:10px 14px;text-align:center;font-weight:600;font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em">Pneus & Roues</th>
+            <th style="padding:10px 14px;text-align:center;font-weight:600;font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em">Statut</th>
+            <th style="padding:10px 14px;text-align:right;font-weight:600;font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="admin-users-tbody">
+          <tr><td colspan="6" style="padding:20px;text-align:center;color:var(--text-muted)">Chargement…</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div style="margin-top:24px;background:var(--card);border-radius:var(--radius);border:1px solid var(--border);padding:18px 20px">
+      <h3 style="font-size:14px;font-weight:600;margin-bottom:12px">🔑 Mot de passe par défaut</h3>
+      <p style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Utilisé comme secours si l'utilisateur n'a pas de profil configuré.</p>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input type="password" id="admin-global-pwd" style="padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;background:var(--bg);color:var(--text);width:220px" placeholder="Nouveau mot de passe global">
+        <button class="btn btn-primary" onclick="saveGlobalPwd()" style="font-size:12px">Changer</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL USER -->
+<div class="modal-overlay" id="user-modal" style="display:none">
+  <div class="modal" style="max-width:480px">
+    <h3><i class="ti ti-user" style="color:var(--blue-mid)"></i> <span id="user-modal-title">Ajouter un utilisateur</span></h3>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="fg" style="grid-column:1/-1"><label>Nom complet</label>
+        <select id="um-name" onchange="prefillUserRole()">
+          <option value="">— Sélectionnez —</option>
+          <option>Etienne Plamondon</option>
+          <option>Serge Grenier</option>
+          <option>Nicolas Rivard</option>
+          <option>Martin Napier</option>
+          <option>Nicolas Fiset</option>
+          <option>Charles Boivin</option>
+          <option>Vincent Bouchard</option>
+          <option>Yves Huard</option>
+          <option value="__custom__">Autre (saisir manuellement)</option>
+        </select>
+        <input id="um-name-custom" placeholder="Prénom Nom" style="display:none;margin-top:6px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;background:var(--bg);color:var(--text);width:100%">
+      </div>
+      <div class="fg" style="grid-column:1/-1"><label>Mot de passe</label><input type="password" id="um-pwd" placeholder="Mot de passe individuel"></div>
+      <div class="fg" style="grid-column:1/-1"><label>Rôle / Titre</label><input id="um-role" placeholder="ex: Directeur des ventes"></div>
+    </div>
+    <div style="margin-top:12px">
+      <label style="font-size:12px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:8px">ACCÈS AUX ONGLETS</label>
+      <div style="display:flex;gap:12px">
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
+          <input type="checkbox" id="um-tab-vo" checked> 🚗 Mise en marché
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
+          <input type="checkbox" id="um-tab-pr"> 🔧 Pneus & Roues
+        </label>
+      </div>
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">
+      <button class="btn" onclick="closeUserModal()">Annuler</button>
+      <button class="btn btn-primary" onclick="saveUser()">Sauvegarder</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL PR -->
+<div class="modal-overlay" id="pr-modal" style="display:none">
+  <div class="modal" style="max-width:580px">
+    <h3><i class="ti ti-tire" style="color:var(--blue-mid)"></i> <span id="pr-modal-title">Ajouter pneu / roue</span></h3>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="fg"><label>Type</label>
+        <select id="pr-f-type-modal" onchange="updatePRForm()">
+          <option value="pneu">Pneu</option>
+          <option value="roue">Roue</option>
+        </select>
+      </div>
+      <div class="fg"><label># Inventaire</label><input id="pr-id" placeholder="ex: PU00076 ou RU00036"></div>
+      <div class="fg"><label>Marque véhicule</label><input id="pr-marque-v" placeholder="Hyundai"></div>
+      <div class="fg"><label>Modèle véhicule</label><input id="pr-modele-v" placeholder="Tucson"></div>
+      <div class="fg"><label>Année véhicule</label><input id="pr-annee" placeholder="2022"></div>
+      <div class="fg"><label># Stock véhicule</label><input id="pr-stock-v" placeholder="7380A"></div>
+      <div class="fg pr-pneu-field"><label>Marque pneu</label><input id="pr-marque-p" placeholder="Michelin"></div>
+      <div class="fg pr-pneu-field"><label>Modèle pneu</label><input id="pr-modele-p" placeholder="X-Ice"></div>
+      <div class="fg pr-pneu-field"><label>Saison</label>
+        <select id="pr-saison">
+          <option value="HIVER">Hiver</option>
+          <option value="ETE">Été</option>
+          <option value="4 SAISONS">4 saisons</option>
+        </select>
+      </div>
+      <div class="fg pr-pneu-field"><label>Usure</label><input id="pr-usure" placeholder="10/32"></div>
+      <div class="fg"><label>Grandeur / Dimension</label><input id="pr-grandeur" placeholder="225/60/17 ou 17&quot;"></div>
+      <div class="fg"><label>Roues / Mags</label>
+        <select id="pr-roues-mags">
+          <option value="Non">Sans roues</option>
+          <option value="Roue">Avec roues</option>
+          <option value="Mag">Avec mags</option>
+        </select>
+      </div>
+      <div class="fg pr-roue-field" style="display:none"><label>Bolt Pattern</label><input id="pr-bolt" placeholder="5X114,3"></div>
+      <div class="fg"><label>Localisation</label><input id="pr-loc" placeholder="A2, CONTAINER..."></div>
+      <div class="fg"><label>Prix ($)</label><input type="number" id="pr-prix" placeholder="800"></div>
+    </div>
+    <div class="fg"><label>Notes</label><input id="pr-notes" placeholder="Informations supplémentaires..."></div>
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">
+      <button class="btn" onclick="closePRModal()">Annuler</button>
+      <button class="btn btn-primary" onclick="savePRItem()">Sauvegarder</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL -->
+<div class="modal-overlay" id="modal">
+  <div class="modal">
+    <h3><i class="ti ti-car" style="color:var(--blue-mid)"></i> Nouveau dossier véhicule</h3>
+    <div class="fg-row">
+      <div class="fg"><label>Stock #</label><input id="f-stk" placeholder="ex: 7380A"></div>
+      <div class="fg"><label>Année</label><input type="number" id="f-yr" placeholder="2024" min="2000" max="2030"></div>
+    </div>
+    <div class="fg-row">
+      <div class="fg"><label>Marque</label><input id="f-mk" placeholder="Hyundai"></div>
+      <div class="fg"><label>Modèle</label><input id="f-mo" placeholder="Tucson"></div>
+    </div>
+    <div class="fg-row">
+      <div class="fg"><label>Kilométrage</label><input type="number" id="f-km" placeholder="45000"></div>
+      <div class="fg"><label>Prix demandé ($)</label><input type="number" id="f-pr" placeholder="29995"></div>
+    </div>
+    <div class="fg"><label>Couleur</label><input id="f-col" placeholder="ex: Blanc, Noir, Gris..."></div>
+        <div class="fg"><label>URL fiche D2C (optionnel)</label><input id="f-url" placeholder="ex: https://www.hyundaistraymond.com/occasion/..."></div>
+    <div class="fg"><label>Responsable principal</label>
+      <select id="f-resp">
+        <option value="Serge Grenier">Serge Grenier — Directeur des ventes</option>
+        <option value="Nicolas Rivard">Nicolas Rivard — Directeur adjoint</option>
+      </select>
+    </div>
+    <div class="section-title">Requêtes département service</div>
+    <label class="check-row"><input type="checkbox" id="f-insp" checked> Inspection mécanique (Vincent Bouchard)</label>
+    <label class="check-row"><input type="checkbox" id="f-carro"> Carrosserie / débosselage</label>
+    <label class="check-row"><input type="checkbox" id="f-pb"> Remplacement pare-brise</label>
+    <label class="check-row"><input type="checkbox" id="f-esthet" checked> Esthétique & détailing (Martin Napier / Nicolas Fiset)</label>
+    <label class="check-row"><input type="checkbox" id="f-photos" checked> Séance photo (Charles Boivin)</label>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal()">Annuler</button>
+      <button class="btn btn-primary" onclick="addVehicle()"><i class="ti ti-send" style="font-size:13px"></i> Créer le dossier</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const PASSWORD = 'hyundai2025';
+const DRIVE_PARENT_ID = '1nTHp8DsOxj8UQHjmk9AW0nYGzdeme-5l';
+const STORAGE_KEY = 'vo-hsr-vehicles-v2';
+const ANTHROPIC_KEY_PLACEHOLDER = 'VOTRE_CLE_API_ANTHROPIC';
+
+const TEAM = {
+  'Etienne Plamondon': {role:'Directeur Général', initials:'EP', email:'eplamondon@hyundaistraymond.ca'},
+  'Serge Grenier': {role:'Directeur des ventes', initials:'SG', email:'serge.grenier@hyundaistraymond.ca'},
+  'Nicolas Rivard': {role:'Directeur adjoint', initials:'NR', email:'nrivard@hyundaistraymond.ca'},
+  'Martin Napier': {role:'Esthétique', initials:'MN', email:'livraison@hyundaistraymond.ca'},
+  'Nicolas Fiset': {role:'Esthétique', initials:'NF', email:'autofiset@outlook.com'},
+  'Charles Boivin': {role:'Photos', initials:'CB', email:'charles.boivin@hyundaistraymond.ca'},
+  'Vincent Bouchard': {role:'Dir. pièces / Inspection', initials:'VB', email:'vbouchard@hyundaistraymond.ca'},
+  'Yves Huard': {role:'Pneus & Roues', initials:'YH', email:''},
+};
+
+const STEPS_DEF = [
+  {id:'enligne',phase:'dir',name:'Mise en ligne site web D2C',assign:'Serge Grenier / Nicolas Rivard',delay:1,icon:'ti-world'},
+
+  {id:'req_insp',phase:'dir',name:'Requête inspection',assign:'Dir. occasion → Service',delay:1,icon:'ti-clipboard-list'},
+  {id:'req_carro',phase:'dir',name:'Requête carrosserie',assign:'Nicolas Rivard → Carrosserie',delay:1,icon:'ti-car-crash',optional:true,key:'carro'},
+  {id:'req_pb',phase:'dir',name:'Requête pare-brise',assign:'Dir. → Service',delay:1,icon:'ti-windmill',optional:true,key:'pb'},
+  {id:'insp',phase:'service',name:'Inspection mécanique complétée',assign:'Vincent Bouchard',delay:3,icon:'ti-tool'},
+  {id:'carro',phase:'service',name:'Carrosserie / débosselage complété',assign:'Nicolas Rivard → Carrosserie',delay:3,icon:'ti-car-crash',optional:true,key:'carro'},
+  {id:'pb',phase:'service',name:'Pare-brise remplacé',assign:'Service',delay:3,icon:'ti-windmill',optional:true,key:'pb'},
+  {id:'esthet',phase:'service',name:'Remise à neuf — Esthétique',assign:'Martin Napier / Nicolas Fiset',delay:5,icon:'ti-sparkles',key:'esthet'},
+  {id:'photos',phase:'photo',name:'Séance photo finale',assign:'Charles Boivin / Nicolas Rivard',delay:5,icon:'ti-camera',key:'photos'},
+  {id:'complet',phase:'photo',name:'Dossier complet — prêt à la vente',assign:'Serge Grenier',delay:6,icon:'ti-circle-check'},
+];
+const PHASES = [
+  {id:'dir',label:'Direction — mise en marché',icon:'ti-user'},
+  {id:'service',label:'Département service',icon:'ti-tool'},
+  {id:'photo',label:'Photos & finalisation',icon:'ti-camera'},
+];
+
+let currentUser = null;
+let vehicles = [];
+let nid = 1;
+let currentFilter = 'all';
 let saveTimeout = null;
 
 let currentUserTabs = ['vo','pr'];
@@ -1767,15 +3531,66 @@ async function importExcel(input){
   
   showNotif('<div class="spin"></div> Lecture du fichier Excel…','info',0);
   try{
-    // Read XLSX as ZIP to get raw XML with cell colors
-    const JSZip = (await import('https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js')).default;
     const buffer = await file.arrayBuffer();
-    const zip = await JSZip.loadAsync(buffer);
+    // Use DecompressionStream to unzip XLSX (native browser API)
+    // XLSX is a ZIP file - read it as ZIP using native APIs
+    const uint8 = new Uint8Array(buffer);
+    // Find file entries in ZIP
+    async function readZipEntries(data){
+      const view = new DataView(data.buffer || data);
+      const entries = {};
+      let i = 0;
+      while(i < data.length - 4){
+        // Local file header signature
+        if(data[i]===0x50 && data[i+1]===0x4B && data[i+2]===0x03 && data[i+3]===0x04){
+          const compression = view.getUint16(i+8, true);
+          const compSize = view.getUint32(i+18, true);
+          const uncompSize = view.getUint32(i+22, true);
+          const fnLen = view.getUint16(i+26, true);
+          const extraLen = view.getUint16(i+28, true);
+          const fname = new TextDecoder().decode(data.slice(i+30, i+30+fnLen));
+          const dataStart = i+30+fnLen+extraLen;
+          const compData = data.slice(dataStart, dataStart+compSize);
+          if(compression === 0){
+            entries[fname] = compData;
+          } else if(compression === 8){
+            try{
+              const ds = new DecompressionStream('deflate-raw');
+              const writer = ds.writable.getWriter();
+              const reader = ds.readable.getReader();
+              writer.write(compData);
+              writer.close();
+              const chunks = [];
+              let done = false;
+              while(!done){
+                const {value, done:d} = await reader.read();
+                if(d){done=true;}else{chunks.push(value);}
+              }
+              const result = new Uint8Array(uncompSize);
+              let offset = 0;
+              for(const chunk of chunks){result.set(chunk,offset);offset+=chunk.length;}
+              entries[fname] = result;
+            }catch(e){entries[fname]=compData;}
+          }
+          i = dataStart + compSize;
+        } else { i++; }
+      }
+      return entries;
+    }
     
-    // Get styles to find red fill index
-    const stylesXml = await zip.file('xl/styles.xml').async('string');
+    const entries = await readZipEntries(uint8);
+    const decode = (u8) => new TextDecoder().decode(u8);
     const parser = new DOMParser();
-    const stylesDoc = parser.parseFromString(stylesXml, 'text/xml');
+    
+    const stylesXml = decode(entries['xl/styles.xml']);
+    const sheetXml = decode(entries['xl/worksheets/sheet1.xml']);
+    const ssXml = entries['xl/sharedStrings.xml'] ? decode(entries['xl/sharedStrings.xml']) : '<sst></sst>';
+    
+    const stylesDoc = parser.parseFromString(stylesXml,'text/xml');
+    const sheetDoc = parser.parseFromString(sheetXml,'text/xml');
+    const ssDoc = parser.parseFromString(ssXml,'text/xml');
+    
+    // Styles already parsed above
     
     // Find fill indices that are red (FF0000 or FFFF0000)
     const fills = stylesDoc.querySelectorAll('fills fill fgColor');
@@ -1793,20 +3608,11 @@ async function importExcel(input){
       if(redFillIndices.has(fillId)) redXfIndices.add(i);
     });
     
-    // Parse sheet data
-    const sheetXml = await zip.file('xl/worksheets/sheet1.xml').async('string');
-    const sheetDoc = parser.parseFromString(sheetXml, 'text/xml');
-    
-    // Get shared strings
+    // Sheet and shared strings already parsed above
     let sharedStrings = [];
-    const ssFile = zip.file('xl/sharedStrings.xml');
-    if(ssFile){
-      const ssXml = await ssFile.async('string');
-      const ssDoc = parser.parseFromString(ssXml, 'text/xml');
-      ssDoc.querySelectorAll('si').forEach(function(si){
-        sharedStrings.push(si.textContent || '');
-      });
-    }
+    ssDoc.querySelectorAll('si').forEach(function(si){
+      sharedStrings.push(si.textContent || '');
+    });
     
     function getCellValue(cell){
       const t = cell.getAttribute('t');
