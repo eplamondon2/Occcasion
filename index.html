@@ -336,6 +336,7 @@ header{background:var(--blue);color:white;padding:0 20px;height:56px;display:fle
         </div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
           <label class="btn" style="cursor:pointer"><i class="ti ti-upload" style="font-size:14px"></i> Importer Excel<input type="file" id="pr-import-file" accept=".xlsx" style="display:none" onchange="importExcel(this)"></label>
+          <button class="btn" onclick="printInventaire()"><i class="ti ti-printer" style="font-size:14px"></i> Imprimer</button>
           <button class="btn btn-primary" onclick="openPRModal()"><i class="ti ti-plus" style="font-size:14px"></i> Ajouter</button>
         </div>
       </div>
@@ -1752,6 +1753,112 @@ async function markVenduFromPanel(id){
   closePRDetail();
   await loadPR();
   showNotif('<i class="ti ti-check"></i> '+id+' marqué comme vendu','ok');
+}
+
+function printInventaire(){
+  // Get currently filtered list
+  const search = (document.getElementById('pr-search')?.value||'').toLowerCase();
+  const fType = document.getElementById('pr-f-type')?.value||'';
+  const fSaison = document.getElementById('pr-f-saison')?.value||'';
+  const fRoue = document.getElementById('pr-f-roue')?.value||'';
+  const fVendu = document.getElementById('pr-f-vendu')?.value;
+
+  let list = prItems.filter(function(item){
+    if(fType && item.type !== fType) return false;
+    if(fVendu !== '' && fVendu !== undefined && String(item.vendu) !== fVendu) return false;
+    if(fSaison && (item.saison||'').toUpperCase().indexOf(fSaison) === -1) return false;
+    if(fRoue){
+      const rm = (item.roues_mags||'').toLowerCase();
+      if(fRoue === 'Roue' && rm.indexOf('roue') === -1) return false;
+      if(fRoue === 'Mag' && rm.indexOf('mag') === -1) return false;
+      if(fRoue === 'Non' && rm !== 'non') return false;
+    }
+    if(search){
+      const searchable = [item.id,item.marque_vehicule,item.modele_vehicule,item.marque_pneu,item.modele_pneu,item.grandeur,item.dimension,item.localisation,item.bolt_pattern,item.saison].join(' ').toLowerCase();
+      if(searchable.indexOf(search) === -1) return false;
+    }
+    return true;
+  });
+
+  // Sort by type then ID
+  list.sort(function(a,b){ return a.id.localeCompare(b.id); });
+
+  const now = new Date().toLocaleDateString('fr-CA', {year:'numeric',month:'long',day:'numeric'});
+  const filterDesc = [
+    fType ? (fType==='pneu'?'Pneus seulement':'Roues seulement') : 'Pneus & Roues',
+    fSaison || '',
+    fVendu==='true'?'Vendus':fVendu==='false'?'Disponibles':'Tous statuts',
+    search ? '— Recherche: "'+search+'"' : ''
+  ].filter(Boolean).join(' · ');
+
+  const rows = list.map(function(item){
+    const grandeur = item.grandeur || item.dimension || '—';
+    const marque = item.marque_pneu || item.marque_vehicule || '—';
+    const modele = item.modele_pneu || item.modele_vehicule || '—';
+    const loc = item.localisation || '—';
+    const usure = item.usure || '—';
+    const prix = item.prix ? item.prix+'$' : '—';
+    const saison = (item.saison||'').toUpperCase().indexOf('HIVER')!==-1?'❄️':(item.saison||'').toUpperCase().indexOf('ET')!==-1?'☀️':'';
+    const venduMark = item.vendu ? ' ✗' : '';
+    return '<tr style="'+(item.vendu?'opacity:.5;text-decoration:line-through':'')+'">'
+      +'<td style="padding:5px 8px;border:1px solid #ddd;font-family:monospace;font-size:11px">'+item.id+venduMark+'</td>'
+      +'<td style="padding:5px 8px;border:1px solid #ddd;font-size:11px">'+(item.type==='pneu'?'Pneu':'Roue')+'</td>'
+      +'<td style="padding:5px 8px;border:1px solid #ddd;font-size:12px;font-weight:600">'+grandeur+'</td>'
+      +'<td style="padding:5px 8px;border:1px solid #ddd;font-size:11px">'+saison+' '+marque+'</td>'
+      +'<td style="padding:5px 8px;border:1px solid #ddd;font-size:11px">'+modele+'</td>'
+      +'<td style="padding:5px 8px;border:1px solid #ddd;font-size:11px">'+loc+'</td>'
+      +'<td style="padding:5px 8px;border:1px solid #ddd;font-size:11px;text-align:center">'+usure+'</td>'
+      +'<td style="padding:5px 8px;border:1px solid #ddd;font-size:11px;text-align:right">'+prix+'</td>'
+      +'<td style="padding:5px 8px;border:1px solid #ddd;font-size:11px;text-align:center"><input type="checkbox" style="width:14px;height:14px"></td>'
+      +'</tr>';
+  }).join('');
+
+  const html = '<!DOCTYPE html><html><head><meta charset="utf-8">'
+    +'<title>Inventaire Pneus & Roues — Hyundai St-Raymond</title>'
+    +'<style>'
+    +'body{font-family:Arial,sans-serif;margin:20px;color:#000}'
+    +'@media print{body{margin:10px}.no-print{display:none}}'
+    +'table{width:100%;border-collapse:collapse;margin-top:12px}'
+    +'th{background:#003087;color:white;padding:7px 8px;text-align:left;font-size:11px;border:1px solid #002060}'
+    +'tr:nth-child(even) td{background:#f5f7fa}'
+    +'.header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;padding-bottom:8px;border-bottom:2px solid #003087}'
+    +'.logo{font-size:18px;font-weight:bold;color:#003087}'
+    +'.meta{text-align:right;font-size:11px;color:#555}'
+    +'.stats{display:flex;gap:20px;margin:8px 0;font-size:12px}'
+    +'.stat{background:#f0f4ff;padding:5px 12px;border-radius:4px;border-left:3px solid #003087}'
+    +'</style>'
+    +'</head><body>'
+    +'<div class="header">'
+    +'<div><div class="logo">🔧 Hyundai St-Raymond — Pneus & Roues</div>'
+    +'<div style="font-size:12px;color:#555;margin-top:3px">Rapport inventaire physique</div></div>'
+    +'<div class="meta"><div>'+now+'</div><div style="margin-top:2px">'+filterDesc+'</div></div>'
+    +'</div>'
+    +'<div class="stats">'
+    +'<div class="stat"><strong>'+list.filter(function(i){return i.type==='pneu';}).length+'</strong> pneus</div>'
+    +'<div class="stat"><strong>'+list.filter(function(i){return i.type==='roue';}).length+'</strong> roues</div>'
+    +'<div class="stat"><strong>'+list.length+'</strong> total</div>'
+    +'</div>'
+    +'<table>'
+    +'<thead><tr>'
+    +'<th># Inventaire</th><th>Type</th><th>Grandeur / Dim.</th><th>Marque</th><th>Modèle</th>'
+    +'<th>Localisation</th><th style="text-align:center">Usure</th><th style="text-align:right">Prix</th>'
+    +'<th style="text-align:center">✓ Vérifié</th>'
+    +'</tr></thead>'
+    +'<tbody>'+rows+'</tbody>'
+    +'</table>'
+    +'<div style="margin-top:16px;font-size:10px;color:#888;text-align:center">'
+    +'Hyundai St-Raymond · Inventaire genere le '+now+' · '+list.length+' items'
+    +'</div>'
+    +'<div class="no-print" style="margin-top:16px;text-align:center">'
+    +'<button onclick="window.print()" style="background:#003087;color:white;border:none;padding:10px 24px;border-radius:6px;font-size:14px;cursor:pointer">🖨️ Imprimer</button>'
+    +'</div>'
+    +'</body></html>';
+
+  const win = window.open('','_blank');
+  win.document.write(html);
+  win.document.close();
+  win.focus();
+  setTimeout(function(){ win.print(); }, 500);
 }
 
 async function importExcel(input){
