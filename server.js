@@ -615,7 +615,7 @@ app.post('/api/upload-file', async (req, res) => {
     const boundary = 'boundary_' + Date.now();
     const metadata = JSON.stringify({ name: fileName, parents: [folderId] });
     const body = Buffer.concat([Buffer.from('--'+boundary+'\r\nContent-Type: application/json\r\n\r\n'), Buffer.from(metadata), Buffer.from('\r\n--'+boundary+'\r\nContent-Type: '+(mimeType||'application/pdf')+'\r\n\r\n'), fileBuffer, Buffer.from('\r\n--'+boundary+'--')]);
-    const r = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink', { method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'multipart/related; boundary='+boundary, 'Content-Length': body.length }, body: body });
+    const r = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink', { method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'multipart/related; boundary='+boundary }, body: body });
     const uploaded = await r.json();
     if (!uploaded.id) throw new Error('Erreur upload: ' + JSON.stringify(uploaded));
     return res.json({ uploaded: true, fileId: uploaded.id, fileName: uploaded.name, fileUrl: uploaded.webViewLink });
