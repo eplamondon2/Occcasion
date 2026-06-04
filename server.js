@@ -606,20 +606,53 @@ app.post('/api/move-carfax', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+async function getOAuthToken() {
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  const refreshToken = process.env.GOOGLE_REFRESH_TOKEN;
+  if (!clientId || !clientSecret || !refreshToken) throw new Error('OAuth credentials manquantes');
+  const r = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: clientId,
+      client_secret: clientSecret,
+      refresh_token: refreshToken,
+      grant_type: 'refresh_token'
+    })
+  });
+  const data = await r.json();
+  if (!data.access_token) throw new Error('OAuth token invalide: ' + JSON.stringify(data));
+  return data.access_token;
+}
+
 app.post('/api/upload-file', async (req, res) => {
   const { folderId, fileName, fileData, mimeType } = req.body;
   if (!folderId || !fileName || !fileData) return res.status(400).json({ error: 'folderId, fileName et fileData requis' });
   try {
-    const token = await getGoogleToken();
+    const token = await getOAuthToken();
     const fileBuffer = Buffer.from(fileData, 'base64');
     const boundary = 'boundary_' + Date.now();
     const metadata = JSON.stringify({ name: fileName, parents: [folderId] });
-    const body = Buffer.concat([Buffer.from('--'+boundary+'\r\nContent-Type: application/json\r\n\r\n'), Buffer.from(metadata), Buffer.from('\r\n--'+boundary+'\r\nContent-Type: '+(mimeType||'application/pdf')+'\r\n\r\n'), fileBuffer, Buffer.from('\r\n--'+boundary+'--')]);
-    const r = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink', { method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'multipart/related; boundary='+boundary }, body: body });
+    const body = Buffer.concat([
+      Buffer.from('--'+boundary+'\r\nContent-Type: application/json\r\n\r\n'),
+      Buffer.from(metadata),
+      Buffer.from('\r\n--'+boundary+'\r\nContent-Type: '+(mimeType||'application/pdf')+'\r\n\r\n'),
+      fileBuffer,
+      Buffer.from('\r\n--'+boundary+'--')
+    ]);
+    const r = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'multipart/related; boundary='+boundary },
+      body: body
+    });
     const uploaded = await r.json();
     if (!uploaded.id) throw new Error('Erreur upload: ' + JSON.stringify(uploaded));
     return res.json({ uploaded: true, fileId: uploaded.id, fileName: uploaded.name, fileUrl: uploaded.webViewLink });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) {
+    console.error('upload-file:', err.message);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.post('/api/check-web', async (req, res) => {
