@@ -606,49 +606,20 @@ app.post('/api/move-carfax', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-async function getOAuthToken() {
-  const clientId = process.env.GOOGLE_CLIENT_ID;
-  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-  const refreshToken = process.env.GOOGLE_REFRESH_TOKEN;
-  if (!clientId || !clientSecret || !refreshToken) throw new Error('OAuth credentials manquantes');
-  const r = await fetch('https://oauth2.googleapis.com/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      client_id: clientId,
-      client_secret: clientSecret,
-      refresh_token: refreshToken,
-      grant_type: 'refresh_token'
-    })
-  });
-  const data = await r.json();
-  if (!data.access_token) throw new Error('OAuth token invalide: ' + JSON.stringify(data));
-  return data.access_token;
-}
+const APPS_SCRIPT_UPLOAD_URL = 'https://script.google.com/macros/s/AKfycbxY1zzQzzfb4ydr75LQniz5x_Ihcnvuvb3lpXradBS-Mkz1TKre5pis3hQuzuwHHFIU/exec';
 
 app.post('/api/upload-file', async (req, res) => {
   const { folderId, fileName, fileData, mimeType } = req.body;
   if (!folderId || !fileName || !fileData) return res.status(400).json({ error: 'folderId, fileName et fileData requis' });
   try {
-    const token = await getOAuthToken();
-    const fileBuffer = Buffer.from(fileData, 'base64');
-    const boundary = 'boundary_' + Date.now();
-    const metadata = JSON.stringify({ name: fileName, parents: [folderId] });
-    const body = Buffer.concat([
-      Buffer.from('--'+boundary+'\r\nContent-Type: application/json\r\n\r\n'),
-      Buffer.from(metadata),
-      Buffer.from('\r\n--'+boundary+'\r\nContent-Type: '+(mimeType||'application/pdf')+'\r\n\r\n'),
-      fileBuffer,
-      Buffer.from('\r\n--'+boundary+'--')
-    ]);
-    const r = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink', {
+    const r = await fetch(APPS_SCRIPT_UPLOAD_URL, {
       method: 'POST',
-      headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'multipart/related; boundary='+boundary },
-      body: body
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ folderId, fileName, fileData, mimeType: mimeType || 'application/pdf' })
     });
-    const uploaded = await r.json();
-    if (!uploaded.id) throw new Error('Erreur upload: ' + JSON.stringify(uploaded));
-    return res.json({ uploaded: true, fileId: uploaded.id, fileName: uploaded.name, fileUrl: uploaded.webViewLink });
+    const result = await r.json();
+    if (!result.success) throw new Error(result.error || 'Erreur upload Apps Script');
+    return res.json({ uploaded: true, fileId: result.fileId, fileName: result.fileName, fileUrl: result.fileUrl });
   } catch (err) {
     console.error('upload-file:', err.message);
     res.status(500).json({ error: err.message });
