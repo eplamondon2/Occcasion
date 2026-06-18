@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html lang="fr">
-<head> 
+<head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Hyundai St-Raymond — Occasion</title>
@@ -313,7 +313,10 @@ header{background:var(--blue);color:white;padding:0 20px;height:56px;display:fle
         <button class="filter-btn" onclick="setFilter('docs',this)">Docs manquants</button>
         <button class="filter-btn" onclick="setFilter('fewphotos',this)">&lt; 10 photos</button>
         <button class="filter-btn" onclick="setFilter('okphotos',this)">&ge; 10 photos</button>
-        
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap">
+        <input type="text" id="v-search" placeholder="🔍 Rechercher stock, marque, modèle..." oninput="renderAll()" style="padding:7px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;background:var(--bg);color:var(--text);min-width:260px;flex:1">
+        <button class="btn" onclick="toggleSort()" style="font-size:12px;white-space:nowrap"><i class="ti ti-arrows-sort" style="font-size:13px"></i> <span id="sort-label">Plus récent en haut</span></button>
       </div>
       <div style="display:flex;gap:8px;align-items:center">
         <span class="save-ind" id="save-ind"><i class="ti ti-cloud" style="font-size:12px"></i> Chargement…</span>
@@ -465,6 +468,33 @@ header{background:var(--blue);color:white;padding:0 20px;height:56px;display:fle
     <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">
       <button class="btn" onclick="closeUserModal()">Annuler</button>
       <button class="btn btn-primary" onclick="saveUser()">Sauvegarder</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL EDIT VEHICLE -->
+<div class="modal-overlay" id="edit-vehicle-modal" style="display:none">
+  <div class="modal" style="max-width:500px">
+    <h3><i class="ti ti-edit" style="color:#8b5cf6"></i> Modifier le dossier</h3>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="fg"><label># Stock</label><input id="ev-stock" placeholder="7380A"></div>
+      <div class="fg"><label>Année</label><input id="ev-year" type="number" placeholder="2023"></div>
+      <div class="fg"><label>Marque</label><input id="ev-make" placeholder="Hyundai"></div>
+      <div class="fg"><label>Modèle</label><input id="ev-model" placeholder="Tucson"></div>
+      <div class="fg"><label>Couleur</label><input id="ev-color" placeholder="Noir"></div>
+      <div class="fg"><label>Kilométrage</label><input id="ev-km" type="number" placeholder="45000"></div>
+      <div class="fg"><label>Prix</label><input id="ev-price" type="number" placeholder="29995"></div>
+      <div class="fg"><label>Responsable</label>
+        <select id="ev-resp">
+          <option>Serge Grenier — Dir. ventes</option>
+          <option>Nicolas Rivard — Dir. adjoint</option>
+          <option>Etienne Plamondon — DG</option>
+        </select>
+      </div>
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">
+      <button class="btn" onclick="closeEditVehicle()">Annuler</button>
+      <button class="btn btn-primary" onclick="saveEditVehicle()">Sauvegarder</button>
     </div>
   </div>
 </div>
@@ -670,8 +700,6 @@ function cumDelay(v,idx){
 }
 function stepStatus(v,i){
   if(v.sd[i].done)return'done';
-  const prev=i===0||v.sd[i-1].done;
-  if(!prev)return'blocked';
   const dl=cumDelay(v,i);
   if(dl===0)return'active';
   if(v.daysAgo>dl)return'late';
@@ -798,15 +826,26 @@ function updateMyTasksBanner(){
   }
 }
 
+let sortAsc = false;
+function toggleSort(){
+  sortAsc = !sortAsc;
+  const lbl = document.getElementById('sort-label');
+  if(lbl) lbl.textContent = sortAsc ? 'Plus ancien en haut' : 'Plus récent en haut';
+  renderAll();
+}
+
 function renderAll(){
-  let list = vehicles;
-  if(currentFilter==='late') list=vehicles.filter(isLate);
-  else if(currentFilter==='active') list=vehicles.filter(v=>progress(v)<100&&!isLate(v));
-  else if(currentFilter==='done') list=vehicles.filter(v=>progress(v)===100);
-  else if(currentFilter==='docs') list=vehicles.filter(hasDocIssue);
-  else if(currentFilter==='fewphotos') list=vehicles.filter(v=>v.docs.enligne&&v.docs.photos!==null&&v.docs.photos<10);
-  else if(currentFilter==='okphotos') list=vehicles.filter(v=>v.docs.enligne&&v.docs.photos!==null&&v.docs.photos>=10);
+  let list = [...vehicles];
+  if(currentFilter==='late') list=list.filter(isLate);
+  else if(currentFilter==='active') list=list.filter(v=>progress(v)<100&&!isLate(v));
+  else if(currentFilter==='done') list=list.filter(v=>progress(v)===100);
+  else if(currentFilter==='docs') list=list.filter(hasDocIssue);
+  else if(currentFilter==='fewphotos') list=list.filter(v=>v.docs.enligne&&v.docs.photos!==null&&v.docs.photos<10);
+  else if(currentFilter==='okphotos') list=list.filter(v=>v.docs.enligne&&v.docs.photos!==null&&v.docs.photos>=10);
   else if(currentFilter==='mine') list=getMyTasks();
+  const search=(document.getElementById('v-search')?.value||'').toLowerCase().trim();
+  if(search) list=list.filter(v=>[v.stock,v.make,v.model,v.color,String(v.year||'')].join(' ').toLowerCase().includes(search));
+  list.sort((a,b)=>sortAsc?a.id-b.id:b.id-a.id);
   const el = document.getElementById('vlist');
   if(!vehicles.length){
     el.innerHTML='<div class="empty"><i class="ti ti-car"></i><div style="font-size:15px;font-weight:600;margin-bottom:6px">Aucun dossier</div><div>Cliquez "Nouveau" pour créer le premier dossier de suivi</div></div>';
@@ -866,6 +905,7 @@ function renderCard(v){
       <div class="vchead-actions" onclick="event.stopPropagation()">
         <button class="btn-sm drive" onclick="checkDrive(${v.id})" ${d.scanning?'disabled':''}>${d.scanning?'<div class="spin"></div>':'<i class="ti ti-brand-google-drive" style="font-size:11px"></i>'} ${d.scanning?'…':'Drive'}</button>
         <button class="btn-sm" style="border-color:#0ea5e9;color:#0369a1" onclick="checkWeb(${v.id})" ${d.scanningWeb?'disabled':''}>${d.scanningWeb?'<div class="spin"></div>':'<i class="ti ti-world" style="font-size:11px"></i>'} ${d.scanningWeb?'…':'Web'}</button>
+        ${canEdit?`<button class="btn-sm" style="border-color:#8b5cf6;color:#6d28d9" onclick="openEditVehicle(${v.id})" title="Modifier"><i class="ti ti-edit" style="font-size:11px"></i></button>`:''}
         ${canEdit?`<button class="btn-sm danger" onclick="deleteV(${v.id})" aria-label="Supprimer"><i class="ti ti-trash" style="font-size:11px"></i></button>`:''}
         <i class="ti ti-chevron-down chev ${v.expanded?'open':''}" aria-hidden="true"></i>
       </div>
@@ -913,7 +953,7 @@ function renderStep(v,s,i,canEdit){
   const dl=cumDelay(v,i);
   let dlTxt='',dlC='muted';
   if(st==='done'){dlTxt='Complété le J+'+v.sd[i].doneDay;dlC='ok';}
-  else if(st==='blocked'){dlTxt='En attente de l\'étape précédente';}
+  else if(st==='blocked'){dlTxt='';}
   else if(st==='late'){const d=v.daysAgo-dl;dlTxt='En retard de '+d+' jour'+(d>1?'s':'');dlC='late';}
   else if(st==='warn'){dlTxt='Délai atteint aujourd\'hui';dlC='warn';}
   else if(dl===0){dlTxt='Automatique à l\'arrivée';dlC='ok';}
@@ -922,7 +962,7 @@ function renderStep(v,s,i,canEdit){
   const myStep=isMyStep(s);
   const myStepIds=ROLE_STEPS[currentUser]||[];
   const isMyOwnStep=myStepIds.includes(s.id);
-  const canAct=(isDir||isMyOwnStep)&&!v.sd[i].done&&st!=='blocked';
+  const canAct=(isDir||isMyOwnStep)&&!v.sd[i].done;
   const rowC=st==='late'?'step late':st==='active'||st==='warn'?'step active':'step';
   return`<div class="${rowC}">
     <div class="step-ico ${icoC}"><i class="ti ${ico}"></i></div>
@@ -1247,6 +1287,7 @@ function updateStats(){
 function setFilter(f,el){
   currentFilter=f;
   document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));
   el.classList.add('active');renderAll();
 }
 
@@ -1300,6 +1341,51 @@ async function addVehicle(){
   ['f-stk','f-yr','f-mk','f-mo','f-km','f-pr','f-col','f-url'].forEach(id=>{if(document.getElementById(id))document.getElementById(id).value='';});
   renderAll();
   showNotif('<i class="ti ti-check"></i> Dossier créé — <strong>'+year+' '+make+' '+model+'</strong> (#'+stock+')','ok');
+}
+
+// ===== EDIT VEHICLE =====
+let editVehicleId = null;
+
+function openEditVehicle(id){
+  const v = vehicles.find(x=>x.id===id);
+  if(!v) return;
+  editVehicleId = id;
+  document.getElementById('ev-stock').value = v.stock;
+  document.getElementById('ev-year').value = v.year;
+  document.getElementById('ev-make').value = v.make;
+  document.getElementById('ev-model').value = v.model;
+  document.getElementById('ev-color').value = v.color||'';
+  document.getElementById('ev-km').value = v.km||'';
+  document.getElementById('ev-price').value = v.price||'';
+  document.getElementById('ev-resp').value = v.resp||'Serge Grenier — Dir. ventes';
+  const modal = document.getElementById('edit-vehicle-modal');
+  modal.style.cssText='display:flex;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;align-items:flex-start;justify-content:center;padding:60px 16px;overflow-y:auto';
+}
+
+function closeEditVehicle(){
+  document.getElementById('edit-vehicle-modal').style.display='none';
+}
+
+async function saveEditVehicle(){
+  const v = vehicles.find(x=>x.id===editVehicleId);
+  if(!v) return;
+  const newStock = document.getElementById('ev-stock').value.trim().toUpperCase();
+  v.year = document.getElementById('ev-year').value;
+  v.make = document.getElementById('ev-make').value.trim();
+  v.model = document.getElementById('ev-model').value.trim();
+  v.color = document.getElementById('ev-color').value.trim();
+  v.km = document.getElementById('ev-km').value;
+  v.price = document.getElementById('ev-price').value;
+  v.resp = document.getElementById('ev-resp').value;
+  if(newStock && newStock !== v.stock) {
+    // Update stock number
+    await fetch('/api/vehicles/'+v.stock, {method:'DELETE'});
+    v.stock = newStock;
+  }
+  await saveVehicle(v);
+  closeEditVehicle();
+  renderAll();
+  showNotif('<i class="ti ti-check"></i> Dossier modifié','ok');
 }
 
 const saved=sessionStorage.getItem('vo-user');
