@@ -245,7 +245,7 @@ header{background:var(--blue);color:white;padding:0 20px;height:56px;display:fle
         <option value="Nicolas Rivard">Nicolas Rivard — Directeur adjoint</option>
         <option value="Martin Napier">Martin Napier — Esthétique</option>
         <option value="Nicolas Fiset">Nicolas Fiset — Esthétique</option>
-        <option value="Charles Boivin">Charles Boivin — Photos</option>
+        <option value="Charles Boivin">Charles Boivin — Responsable mise en marché</option>
         <option value="Vincent Bouchard">Vincent Bouchard — Dir. pièces / Inspection</option>
         <option value="Yves Huard">Yves Huard — Pneus &amp; Roues</option>
       </select>
@@ -594,7 +594,7 @@ const TEAM = {
   'Nicolas Rivard': {role:'Directeur adjoint', initials:'NR', email:'nrivard@hyundaistraymond.ca'},
   'Martin Napier': {role:'Esthétique', initials:'MN', email:'livraison@hyundaistraymond.ca'},
   'Nicolas Fiset': {role:'Esthétique', initials:'NF', email:'autofiset@outlook.com'},
-  'Charles Boivin': {role:'Photos', initials:'CB', email:'charles.boivin@hyundaistraymond.ca'},
+  'Charles Boivin': {role:'Responsable mise en marché', initials:'CB', email:'charles.boivin@hyundaistraymond.ca'},
   'Vincent Bouchard': {role:'Dir. pièces / Inspection', initials:'VB', email:'vbouchard@hyundaistraymond.ca'},
   'Yves Huard': {role:'Pneus & Roues', initials:'YH', email:''},
 };
@@ -674,7 +674,7 @@ function showApp(){
   const info = TEAM[currentUser]||{};
   document.getElementById('header-username').textContent = currentUser + (info.role?' — '+info.role:'');
   document.getElementById('header-avatar').textContent = info.initials||currentUser[0];
-  const canEdit = ['Etienne Plamondon','Serge Grenier','Nicolas Rivard'].includes(currentUser);
+  const canEdit = ['Etienne Plamondon','Serge Grenier','Nicolas Rivard','Charles Boivin'].includes(currentUser);
   document.getElementById('btn-add').style.display = canEdit?'inline-flex':'none';
   const isFieldWorker = ['Martin Napier','Nicolas Fiset','Charles Boivin','Vincent Bouchard'].includes(currentUser);
   if(isFieldWorker){ currentFilter='mine'; }
@@ -1548,7 +1548,7 @@ let prItems = [];
 let prSort = {key:'id', dir:1};
 let prEditId = null;
 
-const CAN_EDIT_PR = ['Etienne Plamondon','Serge Grenier','Nicolas Rivard','Yves Huard'];
+const CAN_EDIT_PR = ['Etienne Plamondon','Serge Grenier','Nicolas Rivard','Charles Boivin','Yves Huard'];
 
 function switchTab(tab){
   document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
