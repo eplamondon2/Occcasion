@@ -292,6 +292,7 @@ header{background:var(--blue);color:white;padding:0 20px;height:56px;display:fle
       <div class="stat" onclick="setFilter('inspection',null)" style="cursor:pointer" title="Voir inspections manquantes"><div class="stat-label">Inspection manquante</div><div class="stat-val amber" id="s-inspection">–</div></div>
       <div class="stat" onclick="setFilter('carro',null)" style="cursor:pointer" title="Voir carrosserie à faire"><div class="stat-label">Carrosserie à faire</div><div class="stat-val amber" id="s-carro">–</div></div>
       <div class="stat" onclick="setFilter('fewphotos',null)" style="cursor:pointer" title="Voir &lt; 10 photos"><div class="stat-label">&lt; 10 photos</div><div class="stat-val amber" id="s-photos">–</div></div>
+      <div class="stat" onclick="setFilter('okphotos',null)" style="cursor:pointer" title="Voir ≥ 10 photos"><div class="stat-label">≥ 10 photos</div><div class="stat-val green" id="s-okphotos">–</div></div>
     </div>
 
     <div id="my-tasks-banner" style="display:none;background:var(--blue);color:white;border-radius:var(--radius);padding:14px 18px;margin-bottom:14px;align-items:center;justify-content:space-between;gap:12px">
@@ -310,14 +311,6 @@ header{background:var(--blue);color:white;padding:0 20px;height:56px;display:fle
           <i class="ti ti-user-check" style="font-size:12px"></i> Mes tâches <span id="badge-mine" style="background:var(--blue);color:white;border-radius:20px;padding:1px 7px;font-size:10px;margin-left:3px">0</span>
         </button>
         <button class="filter-btn active" onclick="setFilter('all',this)" id="btn-all">Tous</button>
-        <button class="filter-btn" onclick="setFilter('active',this)">En cours</button>
-        <button class="filter-btn" onclick="setFilter('late',this)">En retard</button>
-        <button class="filter-btn" onclick="setFilter('done',this)">Complétés</button>
-        <button class="filter-btn" onclick="setFilter('carfax',this)">Carfax manquant</button>
-        <button class="filter-btn" onclick="setFilter('inspection',this)">Inspection manquante</button>
-        <button class="filter-btn" onclick="setFilter('carro',this)">Carrosserie à faire</button>
-        <button class="filter-btn" onclick="setFilter('fewphotos',this)">&lt; 10 photos</button>
-        <button class="filter-btn" onclick="setFilter('okphotos',this)">&ge; 10 photos</button>
       </div>
       <div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap">
         <input type="text" id="v-search" placeholder="🔍 Rechercher stock, marque, modèle..." oninput="renderAll()" style="padding:7px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;background:var(--bg);color:var(--text);min-width:260px;flex:1">
@@ -1462,6 +1455,8 @@ function updateStats(){
     return idx !== -1 && !v.sd[idx].done;
   }).length;
   const pi=vehicles.filter(v=>v.docs.enligne&&v.docs.photos!==null&&v.docs.photos<10).length;
+  const okpi=vehicles.filter(v=>v.docs.enligne&&v.docs.photos!==null&&v.docs.photos>=10).length;
+  const sokp=document.getElementById('s-okphotos'); if(sokp) sokp.textContent=okpi;
   const sel=document.getElementById('s-photos');
   if(sel)sel.textContent=pi||'–';
 }
