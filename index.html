@@ -288,7 +288,8 @@ header{background:var(--blue);color:white;padding:0 20px;height:56px;display:fle
       <div class="stat"><div class="stat-label">En cours</div><div class="stat-val blue" id="s-active">–</div></div>
       <div class="stat"><div class="stat-label">Complétés</div><div class="stat-val green" id="s-done">–</div></div>
       <div class="stat"><div class="stat-label">En retard</div><div class="stat-val red" id="s-late">–</div></div>
-      <div class="stat"><div class="stat-label">Docs manquants</div><div class="stat-val amber" id="s-docs">–</div></div>
+      <div class="stat" onclick="setFilter('carfax',null)" style="cursor:pointer"><div class="stat-label">Carfax manquant</div><div class="stat-val amber" id="s-carfax">–</div></div>
+      <div class="stat" onclick="setFilter('inspection',null)" style="cursor:pointer"><div class="stat-label">Inspection manquante</div><div class="stat-val amber" id="s-inspection">–</div></div>
       <div class="stat"><div class="stat-label">&lt; 10 photos</div><div class="stat-val amber" id="s-photos">–</div></div>
     </div>
 
@@ -311,7 +312,8 @@ header{background:var(--blue);color:white;padding:0 20px;height:56px;display:fle
         <button class="filter-btn" onclick="setFilter('active',this)">En cours</button>
         <button class="filter-btn" onclick="setFilter('late',this)">En retard</button>
         <button class="filter-btn" onclick="setFilter('done',this)">Complétés</button>
-        <button class="filter-btn" onclick="setFilter('docs',this)">Docs manquants</button>
+        <button class="filter-btn" onclick="setFilter('carfax',this)">Carfax manquant</button>
+        <button class="filter-btn" onclick="setFilter('inspection',this)">Inspection manquante</button>
         <button class="filter-btn" onclick="setFilter('fewphotos',this)">&lt; 10 photos</button>
         <button class="filter-btn" onclick="setFilter('okphotos',this)">&ge; 10 photos</button>
       </div>
@@ -526,18 +528,31 @@ header{background:var(--blue);color:white;padding:0 20px;height:56px;display:fle
       <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:20px">
         <h3 style="font-size:15px;font-weight:600;margin-bottom:4px">Comparateur de dimension</h3>
         <p style="font-size:11px;color:var(--text-muted);margin-bottom:16px">Comparez deux grandeurs — différence de diamètre et impact sur l'odomètre</p>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:14px">
           <div>
             <div style="font-size:12px;font-weight:600;color:var(--blue);margin-bottom:8px">Dimension 1 (originale)</div>
-            <input id="cmp-1" placeholder="ex: 225/60R17" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:14px;background:var(--bg);color:var(--text);box-sizing:border-box" oninput="runComparator()">
-            <div id="cmp-1-diam" style="font-size:11px;color:var(--text-muted);margin-top:4px"></div>
+            <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+              <select id="cmp-1w" onchange="updateCmpDiam(1)" style="padding:7px 8px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;background:var(--bg);color:var(--text)"><option value="">Largeur</option></select>
+              <span style="color:var(--text-muted)">/</span>
+              <select id="cmp-1r" onchange="updateCmpDiam(1)" style="padding:7px 8px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;background:var(--bg);color:var(--text)"><option value="">Ratio</option></select>
+              <span style="color:var(--text-muted)">R</span>
+              <select id="cmp-1d" onchange="updateCmpDiam(1)" style="padding:7px 8px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;background:var(--bg);color:var(--text)"><option value="">Jante</option></select>
+            </div>
+            <div id="cmp-1-diam" style="font-size:11px;color:var(--text-muted);margin-top:6px"></div>
           </div>
           <div>
             <div style="font-size:12px;font-weight:600;color:#7c3aed;margin-bottom:8px">Dimension 2 (à comparer)</div>
-            <input id="cmp-2" placeholder="ex: 235/55R17" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:14px;background:var(--bg);color:var(--text);box-sizing:border-box" oninput="runComparator()">
-            <div id="cmp-2-diam" style="font-size:11px;color:var(--text-muted);margin-top:4px"></div>
+            <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+              <select id="cmp-2w" onchange="updateCmpDiam(2)" style="padding:7px 8px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;background:var(--bg);color:var(--text)"><option value="">Largeur</option></select>
+              <span style="color:var(--text-muted)">/</span>
+              <select id="cmp-2r" onchange="updateCmpDiam(2)" style="padding:7px 8px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;background:var(--bg);color:var(--text)"><option value="">Ratio</option></select>
+              <span style="color:var(--text-muted)">R</span>
+              <select id="cmp-2d" onchange="updateCmpDiam(2)" style="padding:7px 8px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;background:var(--bg);color:var(--text)"><option value="">Jante</option></select>
+            </div>
+            <div id="cmp-2-diam" style="font-size:11px;color:var(--text-muted);margin-top:6px"></div>
           </div>
         </div>
+        <button class="btn btn-primary" onclick="runComparator()" style="font-size:13px;padding:8px 16px;margin-bottom:14px">Calculer</button>
         <div id="cmp-result" style="display:none">
           <div style="border-radius:8px;padding:14px;margin-bottom:12px" id="cmp-alert-box">
             <div style="font-size:16px;font-weight:700;margin-bottom:4px" id="cmp-pct"></div>
@@ -761,7 +776,7 @@ function showApp(){
   document.getElementById('header-avatar').textContent = info.initials||currentUser[0];
   const canEdit = ['Etienne Plamondon','Serge Grenier','Nicolas Rivard','Charles Boivin'].includes(currentUser);
   document.getElementById('btn-add').style.display = canEdit?'inline-flex':'none';
-  const isFieldWorker = ['Martin Napier','Nicolas Fiset','Charles Boivin','Vincent Bouchard'].includes(currentUser);
+  const isFieldWorker = ['Martin Napier','Nicolas Fiset','Vincent Bouchard'].includes(currentUser);
   if(isFieldWorker){ currentFilter='mine'; }
   // Apply tab permissions
   const tabs = currentUserTabs || ['vo','pr'];
@@ -924,7 +939,8 @@ function renderAll(){
   if(currentFilter==='late') list=list.filter(isLate);
   else if(currentFilter==='active') list=list.filter(v=>progress(v)<100&&!isLate(v));
   else if(currentFilter==='done') list=list.filter(v=>progress(v)===100);
-  else if(currentFilter==='docs') list=list.filter(hasDocIssue);
+  else if(currentFilter==='carfax') list=list.filter(function(v){return !v.docs.carfax&&v.docs.folderId;});
+  else if(currentFilter==='inspection') list=list.filter(function(v){return !v.docs.inspection&&v.docs.folderId;});
   else if(currentFilter==='fewphotos') list=list.filter(v=>v.docs.enligne&&v.docs.photos!==null&&v.docs.photos<10);
   else if(currentFilter==='okphotos') list=list.filter(v=>v.docs.enligne&&v.docs.photos!==null&&v.docs.photos>=10);
   else if(currentFilter==='mine') list=getMyTasks();
@@ -940,6 +956,10 @@ function renderAll(){
     el.innerHTML='<div class="empty"><i class="ti '+eico+'"></i><div>'+emsg+'</div></div>';
   } else {
     el.innerHTML=list.map(renderCard).join('');
+    // Auto-load comments for expanded vehicles
+    setTimeout(function(){
+      list.filter(function(v){return v.expanded;}).forEach(function(v){loadComments(v.id);});
+    }, 150);
   }
   updateStats();
 }
@@ -960,7 +980,7 @@ function renderCard(v){
   const webStatus=d.scanningWeb?spin:d.enligne===null?'<span class="dc-val muted">—</span>':d.enligne?'<span class="dc-val ok"><i class="ti ti-check"></i> En ligne</span>':'<span class="dc-val missing"><i class="ti ti-x"></i> Non trouvé</span>';
   const photosStatus=d.scanningWeb?spin:d.enligne===null?'<span class="dc-val muted">—</span>':d.photos>0?'<span class="dc-val ok"><i class="ti ti-camera"></i> '+d.photos+' photos</span>':'<span class="dc-val missing"><i class="ti ti-camera-off"></i> Aucune photo</span>';
   const driveHref=d.driveFolder?`<a href="${d.driveFolder}" target="_blank" class="btn-sm drive"><i class="ti ti-brand-google-drive" style="font-size:11px"></i> Ouvrir Drive</a>`:'';
-  const canEdit=['Etienne Plamondon','Serge Grenier','Nicolas Rivard'].includes(currentUser);
+  const canEdit=['Etienne Plamondon','Serge Grenier','Nicolas Rivard','Charles Boivin'].includes(currentUser);
   const stepsHtml=PHASES.map(ph=>{
     const ps=v.steps.map((s,i)=>({s,i})).filter(({s})=>s.phase===ph.id);
     if(!ps.length)return'';
@@ -1043,7 +1063,7 @@ function renderStep(v,s,i,canEdit){
   else if(st==='warn'){dlTxt='Délai atteint aujourd\'hui';dlC='warn';}
   else if(dl===0){dlTxt='Automatique à l\'arrivée';dlC='ok';}
   else{const left=dl-v.daysAgo;dlTxt='Délai dans '+left+' jour'+(left>1?'s':'');dlC='ok';}
-  const isDir=['Etienne Plamondon','Serge Grenier','Nicolas Rivard'].includes(currentUser);
+  const isDir=['Etienne Plamondon','Serge Grenier','Nicolas Rivard','Charles Boivin'].includes(currentUser);
   const myStep=isMyStep(s);
   const myStepIds=ROLE_STEPS[currentUser]||[];
   const isMyOwnStep=myStepIds.includes(s.id);
@@ -1200,6 +1220,8 @@ async function createDriveFolder(vid){
       v.docs.folderId=d.folderId;
       saveVehicles();renderAll();
       showNotif('<i class="ti ti-folder-check"></i> Dossier '+(d.existed?'déjà existant':'créé')+' : <strong>'+d.folderName+'</strong>','ok');
+      // Auto-launch Carfax search after folder creation
+      setTimeout(()=>moveCarfax(vid), 1000);
     }
   }catch(e){showNotif('<i class="ti ti-alert-triangle"></i> Erreur: '+e.message,'warn');}
 }
@@ -1362,8 +1384,14 @@ function updateStats(){
   document.getElementById('s-active').textContent=vehicles.filter(v=>progress(v)<100).length;
   document.getElementById('s-done').textContent=vehicles.filter(v=>progress(v)===100).length;
   document.getElementById('s-late').textContent=vehicles.filter(isLate).length;
-  const di=vehicles.filter(hasDocIssue).length;
-  document.getElementById('s-docs').textContent=di||'–';
+  const sc = document.getElementById('s-carfax');
+  const si = document.getElementById('s-inspection');
+  const carfaxMissing = vehicles.filter(function(v){return !v.docs.carfax&&v.docs.folderId;}).length;
+  const inspMissing = vehicles.filter(function(v){return !v.docs.inspection&&v.docs.folderId;}).length;
+  if(sc) sc.textContent = carfaxMissing;
+  if(si) si.textContent = inspMissing;
+  const di=0; // legacy
+  // s-docs replaced by s-carfax and s-inspection above
   const pi=vehicles.filter(v=>v.docs.enligne&&v.docs.photos!==null&&v.docs.photos<10).length;
   const sel=document.getElementById('s-photos');
   if(sel)sel.textContent=pi||'–';
@@ -1441,9 +1469,30 @@ function initConvSelects(){
   const r = document.getElementById('cv-r');
   const d = document.getElementById('cv-d');
   if(!w) return;
-  WIDTHS.forEach(function(v){ w.innerHTML += '<option>'+v+'</option>'; });
-  RATIOS.forEach(function(v){ r.innerHTML += '<option>'+v+'</option>'; });
-  RIMS.forEach(function(v){ d.innerHTML += '<option>'+v+'</option>'; });
+  WIDTHS.forEach(function(v){ 
+    w.innerHTML += '<option>'+v+'</option>';
+    document.getElementById('cmp-1w').innerHTML += '<option>'+v+'</option>';
+    document.getElementById('cmp-2w').innerHTML += '<option>'+v+'</option>';
+  });
+  RATIOS.forEach(function(v){ 
+    r.innerHTML += '<option>'+v+'</option>';
+    document.getElementById('cmp-1r').innerHTML += '<option>'+v+'</option>';
+    document.getElementById('cmp-2r').innerHTML += '<option>'+v+'</option>';
+  });
+  RIMS.forEach(function(v){ 
+    d.innerHTML += '<option>'+v+'</option>';
+    document.getElementById('cmp-1d').innerHTML += '<option>'+v+'</option>';
+    document.getElementById('cmp-2d').innerHTML += '<option>'+v+'</option>';
+  });
+}
+
+function updateCmpDiam(n){
+  const w = parseInt(document.getElementById('cmp-'+n+'w').value);
+  const r = parseInt(document.getElementById('cmp-'+n+'r').value);
+  const d = parseInt(document.getElementById('cmp-'+n+'d').value);
+  const el = document.getElementById('cmp-'+n+'-diam');
+  if(w&&r&&d){ el.textContent='Diamètre: '+calcDiam(w,r,d)+'"'; }
+  else{ el.textContent=''; }
 }
 
 let cvActiveRim = null;
@@ -1530,21 +1579,19 @@ function parseTireSize(s){
 }
 
 function runComparator(){
-  const t1 = parseTireSize(document.getElementById('cmp-1').value);
-  const t2 = parseTireSize(document.getElementById('cmp-2').value);
+  const w1=parseInt(document.getElementById('cmp-1w').value);
+  const r1=parseInt(document.getElementById('cmp-1r').value);
+  const d1=parseInt(document.getElementById('cmp-1d').value);
+  const w2=parseInt(document.getElementById('cmp-2w').value);
+  const r2=parseInt(document.getElementById('cmp-2r').value);
+  const d2=parseInt(document.getElementById('cmp-2d').value);
   
-  const d1el = document.getElementById('cmp-1-diam');
-  const d2el = document.getElementById('cmp-2-diam');
+  if(!w1||!r1||!d1||!w2||!r2||!d2){ 
+    document.getElementById('cmp-result').style.display='none'; return; 
+  }
   
-  if(t1){ const dm=calcDiam(t1.w,t1.r,t1.d); d1el.textContent='Diamètre: '+dm+'"'; }
-  else { d1el.textContent=''; }
-  if(t2){ const dm=calcDiam(t2.w,t2.r,t2.d); d2el.textContent='Diamètre: '+dm+'"'; }
-  else { d2el.textContent=''; }
-  
-  if(!t1||!t2){ document.getElementById('cmp-result').style.display='none'; return; }
-  
-  const diam1 = calcDiam(t1.w,t1.r,t1.d);
-  const diam2 = calcDiam(t2.w,t2.r,t2.d);
+  const diam1 = calcDiam(w1,r1,d1);
+  const diam2 = calcDiam(w2,r2,d2);
   const diffPct = Math.round(((diam2-diam1)/diam1)*100*10)/10;
   const acceptable = Math.abs(diffPct) <= 3;
   
