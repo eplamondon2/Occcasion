@@ -910,8 +910,17 @@ async function loadVehicles(){
   }catch(e){setSaveInd('error');console.error('loadVehicles:',e);}
   renderAll();
   updateMyTasksBanner();
+  // Auto-check steps for all vehicles on load
+  setTimeout(async function(){
+    let anyChanged = false;
+    for(const v of vehicles){
+      const changed = await autoCheckSteps(v);
+      if(changed) anyChanged = true;
+    }
+    if(anyChanged) renderAll();
+  }, 500);
   // Auto-scan vehicles not scanned today
-  setTimeout(autoScanAll, 2000);
+  setTimeout(autoScanAll, 3000);
 }
 
 function setSaveInd(state, msg){
