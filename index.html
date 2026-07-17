@@ -280,6 +280,7 @@ header{background:var(--blue);color:white;padding:0 20px;height:56px;display:fle
   <div class="tab-bar" id="tab-bar" style="background:var(--blue);padding:0 20px;display:flex;gap:0">
     <button class="tab-btn active" id="tab-vo" onclick="switchTab('vo')">🚗 Mise en marché</button>
     <button class="tab-btn" id="tab-pr" onclick="switchTab('pr')">🔧 Pneus & Roues</button>
+    <button class="tab-btn" id="tab-conv" onclick="switchTab('conv')">📐 Conversion pneus</button>
     <button class="tab-btn" id="tab-admin" onclick="switchTab('admin')" style="display:none;margin-left:auto">⚙️ Admin</button>
   </div>
   <div class="tab-content active" id="tab-content-vo"><div class="main">
@@ -472,7 +473,91 @@ header{background:var(--blue);color:white;padding:0 20px;height:56px;display:fle
   </div>
 </div>
 
-<!-- MODAL EDIT VEHICLE -->
+<!-- CONVERSION TAB -->
+<div class="tab-content" id="tab-content-conv" style="display:none">
+  <div class="main">
+    <h2 style="font-size:17px;font-weight:500;margin-bottom:20px">📐 Outils pneus</h2>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px">
+
+      <!-- CONVERTISSEUR -->
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:20px">
+        <h3 style="font-size:15px;font-weight:600;margin-bottom:4px">Convertisseur de dimension</h3>
+        <p style="font-size:11px;color:var(--text-muted);margin-bottom:16px">Entrez une grandeur métrique pour voir les équivalents par taille de jante</p>
+        <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-bottom:14px">
+          <div><label style="font-size:11px;display:block;margin-bottom:4px;color:var(--text-muted)">Largeur</label>
+            <select id="cv-w" style="padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;background:var(--bg);color:var(--text)">
+              <option value="">–</option>
+            </select>
+          </div>
+          <div><label style="font-size:11px;display:block;margin-bottom:4px;color:var(--text-muted)">Ratio</label>
+            <select id="cv-r" style="padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;background:var(--bg);color:var(--text)">
+              <option value="">–</option>
+            </select>
+          </div>
+          <div><label style="font-size:11px;display:block;margin-bottom:4px;color:var(--text-muted)">Jante</label>
+            <select id="cv-d" style="padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;background:var(--bg);color:var(--text)">
+              <option value="">–</option>
+            </select>
+          </div>
+          <button class="btn btn-primary" onclick="runConverter()" style="font-size:13px;padding:8px 16px">Calculer</button>
+        </div>
+        <div id="cv-result" style="display:none">
+          <div style="background:var(--border-light);border-radius:8px;padding:12px;margin-bottom:12px;display:flex;gap:20px;flex-wrap:wrap">
+            <div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase">Diamètre total</div><div id="cv-diam" style="font-size:20px;font-weight:700;color:var(--blue)"></div></div>
+            <div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase">Largeur (po)</div><div id="cv-winch" style="font-size:20px;font-weight:700;color:var(--blue)"></div></div>
+            <div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase">Flanc (mm)</div><div id="cv-sw" style="font-size:20px;font-weight:700;color:var(--blue)"></div></div>
+          </div>
+          <div style="font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em">Grandeurs équivalentes par jante</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px" id="cv-rim-tabs"></div>
+          <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px" id="cv-table">
+            <thead><tr style="background:var(--border-light)">
+              <th style="padding:7px 10px;text-align:left;font-size:11px;color:var(--text-muted)">Grandeur</th>
+              <th style="padding:7px 10px;text-align:left;font-size:11px;color:var(--text-muted)">Diamètre (po)</th>
+              <th style="padding:7px 10px;text-align:left;font-size:11px;color:var(--text-muted)">Vitesse réelle à 100 km/h</th>
+              <th style="padding:7px 10px;text-align:left;font-size:11px;color:var(--text-muted)">Différence %</th>
+            </tr></thead>
+            <tbody id="cv-tbody"></tbody>
+          </table></div>
+        </div>
+      </div>
+
+      <!-- COMPARATEUR -->
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:20px">
+        <h3 style="font-size:15px;font-weight:600;margin-bottom:4px">Comparateur de dimension</h3>
+        <p style="font-size:11px;color:var(--text-muted);margin-bottom:16px">Comparez deux grandeurs — différence de diamètre et impact sur l'odomètre</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
+          <div>
+            <div style="font-size:12px;font-weight:600;color:var(--blue);margin-bottom:8px">Dimension 1 (originale)</div>
+            <input id="cmp-1" placeholder="ex: 225/60R17" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:14px;background:var(--bg);color:var(--text);box-sizing:border-box" oninput="runComparator()">
+            <div id="cmp-1-diam" style="font-size:11px;color:var(--text-muted);margin-top:4px"></div>
+          </div>
+          <div>
+            <div style="font-size:12px;font-weight:600;color:#7c3aed;margin-bottom:8px">Dimension 2 (à comparer)</div>
+            <input id="cmp-2" placeholder="ex: 235/55R17" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:14px;background:var(--bg);color:var(--text);box-sizing:border-box" oninput="runComparator()">
+            <div id="cmp-2-diam" style="font-size:11px;color:var(--text-muted);margin-top:4px"></div>
+          </div>
+        </div>
+        <div id="cmp-result" style="display:none">
+          <div style="border-radius:8px;padding:14px;margin-bottom:12px" id="cmp-alert-box">
+            <div style="font-size:16px;font-weight:700;margin-bottom:4px" id="cmp-pct"></div>
+            <div style="font-size:12px" id="cmp-msg"></div>
+          </div>
+          <table style="width:100%;border-collapse:collapse;font-size:12px">
+            <thead><tr style="background:var(--border-light)">
+              <th style="padding:7px 10px;text-align:left;font-size:11px;color:var(--text-muted)">Vitesse odomètre</th>
+              <th style="padding:7px 10px;text-align:center;font-size:11px;color:var(--blue)">Dim. 1 réelle</th>
+              <th style="padding:7px 10px;text-align:center;font-size:11px;color:#7c3aed">Dim. 2 réelle</th>
+            </tr></thead>
+            <tbody id="cmp-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL EDIT VEHICLE --><!-- MODAL EDIT VEHICLE -->
 <div class="modal-overlay" id="edit-vehicle-modal" style="display:none">
   <div class="modal" style="max-width:500px">
     <h3><i class="ti ti-edit" style="color:#8b5cf6"></i> Modifier le dossier</h3>
@@ -1343,6 +1428,151 @@ async function addVehicle(){
   showNotif('<i class="ti ti-check"></i> Dossier créé — <strong>'+year+' '+make+' '+model+'</strong> (#'+stock+')','ok');
 }
 
+// ===== CONVERSION PNEUS =====
+const WIDTHS = [135,145,155,165,175,185,195,205,215,225,235,245,255,265,275,285,295,305,315,325,335,345];
+const RATIOS = [30,35,40,45,50,55,60,65,70,75,80];
+const RIMS = [13,14,15,16,17,18,19,20,21,22];
+
+function calcDiam(w,r,d){ return Math.round(((w*(r/100)/25.4)*2 + d)*10)/10; }
+function calcSpeed(origDiam, newDiam){ return Math.round((newDiam/origDiam)*100*10)/10; }
+
+function initConvSelects(){
+  const w = document.getElementById('cv-w');
+  const r = document.getElementById('cv-r');
+  const d = document.getElementById('cv-d');
+  if(!w) return;
+  WIDTHS.forEach(function(v){ w.innerHTML += '<option>'+v+'</option>'; });
+  RATIOS.forEach(function(v){ r.innerHTML += '<option>'+v+'</option>'; });
+  RIMS.forEach(function(v){ d.innerHTML += '<option>'+v+'</option>'; });
+}
+
+let cvActiveRim = null;
+let cvBaseData = null;
+
+function runConverter(){
+  const w = parseInt(document.getElementById('cv-w').value);
+  const r = parseInt(document.getElementById('cv-r').value);
+  const d = parseInt(document.getElementById('cv-d').value);
+  if(!w||!r||!d) return;
+  
+  const baseDiam = calcDiam(w,r,d);
+  document.getElementById('cv-diam').textContent = baseDiam + '"';
+  document.getElementById('cv-winch').textContent = (w/25.4).toFixed(1) + '"';
+  document.getElementById('cv-sw').textContent = Math.round(w*(r/100)) + ' mm';
+  
+  // Generate equivalents for all rim sizes
+  cvBaseData = {w,r,d,baseDiam};
+  cvActiveRim = null;
+  
+  const rimTabs = document.getElementById('cv-rim-tabs');
+  rimTabs.innerHTML = RIMS.map(function(rim){
+    return '<button onclick="showRimTab('+rim+')" id="cvrim-'+rim+'" style="padding:4px 10px;border-radius:20px;border:1px solid var(--border);background:var(--bg);font-size:11px;cursor:pointer;color:var(--text)">'+rim+' po</button>';
+  }).join('');
+  
+  showRimTab(d);
+  document.getElementById('cv-result').style.display = 'block';
+}
+
+function showRimTab(rim){
+  cvActiveRim = rim;
+  // Highlight active tab
+  RIMS.forEach(function(r){
+    const btn = document.getElementById('cvrim-'+r);
+    if(btn){ btn.style.background = r===rim?'var(--blue)':'var(--bg)'; btn.style.color = r===rim?'white':'var(--text)'; btn.style.borderColor = r===rim?'var(--blue)':'var(--border)'; }
+  });
+  
+  const {w, r:baseR, baseDiam} = cvBaseData;
+  const tbody = document.getElementById('cv-tbody');
+  
+  const rows = [];
+  RATIOS.forEach(function(ratio){
+    const diam = calcDiam(w, ratio, rim);
+    const diffPct = Math.round(((diam-baseDiam)/baseDiam)*100*10)/10;
+    const speed = Math.round((diam/baseDiam)*100*10)/10;
+    const isBase = ratio===baseR && rim===(cvBaseData.d);
+    rows.push({size: w+'/'+ratio+'R'+rim, diam, diffPct, speed, isBase});
+  });
+  
+  // Also add nearby widths
+  const nearW = WIDTHS.filter(function(v){ return Math.abs(v-w)<=20 && v!==w; });
+  nearW.forEach(function(nw){
+    RATIOS.forEach(function(ratio){
+      const diam2 = calcDiam(nw, ratio, rim);
+      const diff2 = Math.round(((diam2-baseDiam)/baseDiam)*100*10)/10;
+      if(Math.abs(diff2)<=3){
+        const speed2 = Math.round((diam2/baseDiam)*100*10)/10;
+        rows.push({size: nw+'/'+ratio+'R'+rim, diam:diam2, diffPct:diff2, speed:speed2, isBase:false});
+      }
+    });
+  });
+  
+  rows.sort(function(a,b){ return a.diam-b.diam; });
+  
+  tbody.innerHTML = rows.map(function(row){
+    const color = row.isBase?'background:var(--border-light);font-weight:600':'';
+    const diffColor = Math.abs(row.diffPct)<=3?'color:#16a34a':'color:#dc2626';
+    const warn = Math.abs(row.diffPct)>3?' ⚠️':'';
+    return '<tr style="border-bottom:1px solid var(--border-light);'+color+'">'
+      +'<td style="padding:6px 10px;font-family:monospace;font-weight:'+(row.isBase?700:400)+'">'+row.size+(row.isBase?' ★':'')+'</td>'
+      +'<td style="padding:6px 10px">'+row.diam+'"</td>'
+      +'<td style="padding:6px 10px">'+row.speed+' km/h</td>'
+      +'<td style="padding:6px 10px;'+diffColor+'">'+(row.diffPct>0?'+':'')+row.diffPct+'%'+warn+'</td>'
+      +'</tr>';
+  }).join('');
+}
+
+function parseTireSize(s){
+  s = s.trim().toUpperCase().replace('R',' ');
+  // Format: 225/60 17 or 225/60R17
+  const m = s.match(/(\d+)\/(\d+)[R\s](\d+)/);
+  if(!m) return null;
+  return {w:parseInt(m[1]),r:parseInt(m[2]),d:parseInt(m[3])};
+}
+
+function runComparator(){
+  const t1 = parseTireSize(document.getElementById('cmp-1').value);
+  const t2 = parseTireSize(document.getElementById('cmp-2').value);
+  
+  const d1el = document.getElementById('cmp-1-diam');
+  const d2el = document.getElementById('cmp-2-diam');
+  
+  if(t1){ const dm=calcDiam(t1.w,t1.r,t1.d); d1el.textContent='Diamètre: '+dm+'"'; }
+  else { d1el.textContent=''; }
+  if(t2){ const dm=calcDiam(t2.w,t2.r,t2.d); d2el.textContent='Diamètre: '+dm+'"'; }
+  else { d2el.textContent=''; }
+  
+  if(!t1||!t2){ document.getElementById('cmp-result').style.display='none'; return; }
+  
+  const diam1 = calcDiam(t1.w,t1.r,t1.d);
+  const diam2 = calcDiam(t2.w,t2.r,t2.d);
+  const diffPct = Math.round(((diam2-diam1)/diam1)*100*10)/10;
+  const acceptable = Math.abs(diffPct) <= 3;
+  
+  const alertBox = document.getElementById('cmp-alert-box');
+  alertBox.style.background = acceptable?'#f0fdf4':'#fef2f2';
+  alertBox.style.border = '1px solid '+(acceptable?'#bbf7d0':'#fecaca');
+  document.getElementById('cmp-pct').style.color = acceptable?'#15803d':'#dc2626';
+  document.getElementById('cmp-pct').textContent = 'Différence: '+(diffPct>0?'+':'')+diffPct+'%';
+  document.getElementById('cmp-msg').textContent = acceptable
+    ? '✓ Compatible — différence acceptable (≤ 3%)'
+    : '⚠️ Attention — différence trop grande, risque impact sur ABS et odomètre';
+  
+  // Speed table
+  const speeds = [30,40,50,60,70,80,90,100,110,120];
+  const tbody = document.getElementById('cmp-tbody');
+  tbody.innerHTML = speeds.map(function(s){
+    const r1 = Math.round((s * diam1/diam1)*10)/10;
+    const r2 = Math.round((s * diam2/diam1)*10)/10;
+    return '<tr style="border-bottom:1px solid var(--border-light)">'
+      +'<td style="padding:6px 10px;font-weight:600">'+s+' km/h</td>'
+      +'<td style="padding:6px 10px;text-align:center;color:var(--blue)">'+(s)+' km/h</td>'
+      +'<td style="padding:6px 10px;text-align:center;color:#7c3aed">'+r2+' km/h</td>'
+      +'</tr>';
+  }).join('');
+  
+  document.getElementById('cmp-result').style.display='block';
+}
+
 // ===== EDIT VEHICLE =====
 let editVehicleId = null;
 
@@ -1558,6 +1788,7 @@ function switchTab(tab){
   if(btn) btn.classList.add('active');
   if(content){content.classList.add('active');content.style.display='block';}
   if(tab==='pr' && prItems.length===0) loadPR();
+  if(tab==='conv') initConvSelects();
 }
 
 // Wrap existing app in tab-content
