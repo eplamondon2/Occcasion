@@ -823,6 +823,52 @@ async function saveVehicle(v){
   }catch(e){setSaveInd('error');}
 }
 
+async function autoCheckSteps(v){
+  let changed = false;
+  const d = v.docs;
+  const hasInspection = d.inspection;
+  const hasEstimation = d.estimation;
+  const hasCarfax = d.carfax;
+  const enLigne = d.enligne;
+  const photos = d.photos || 0;
+  const enoughPhotos = photos >= 10;
+
+  function checkStep(id){
+    const idx = v.steps.findIndex(function(s){return s.id===id;});
+    if(idx !== -1 && !v.sd[idx].done){
+      v.sd[idx].done = true;
+      v.sd[idx].doneDay = v.daysAgo || 0;
+      changed = true;
+    }
+  }
+
+  // Requête inspection → si inspection ou estimation présente
+  if(hasInspection || hasEstimation) checkStep('req_insp');
+
+  // Inspection mécanique complétée → si inspection ET estimation présentes
+  if(hasInspection && hasEstimation) checkStep('insp');
+
+  // Remise à neuf esthétique → si >= 10 photos
+  if(enoughPhotos) checkStep('esthet');
+
+  // Séance photo finale → si >= 10 photos
+  if(enoughPhotos) checkStep('photos');
+
+  // Mise en ligne → si véhicule en ligne
+  if(enLigne) checkStep('enligne');
+
+  // Dossier complet → si tout est là
+  if(hasCarfax && hasInspection && hasEstimation && enLigne && enoughPhotos){
+    checkStep('complet');
+  }
+
+  if(changed){
+    await saveVehicle(v);
+    showNotif('<i class="ti ti-check"></i> Étapes cochées automatiquement pour <strong>'+v.stock+'</strong>','ok');
+  }
+  return changed;
+}
+
 function saveVehicles(){
   setSaveInd('saving');
   clearTimeout(saveTimeout);
@@ -1168,6 +1214,7 @@ async function checkDrive(vid){
     v.docs.carfax=false;v.docs.inspection=false;v.docs.estimation=false;
   }
   v.docs.scanning=false;
+  await autoCheckSteps(v);
   saveVehicles();renderAll();
 }
 
@@ -1205,6 +1252,7 @@ async function checkWeb(vid){
     v.docs.enligne=false;v.docs.photos=0;v.docs.webScanned=true;
   }
   v.docs.scanningWeb=false;
+  await autoCheckSteps(v);
   saveVehicles();renderAll();
 }
 
@@ -1235,7 +1283,7 @@ async function moveCarfax(vid){
       body:JSON.stringify({stock:v.stock,parentId:DRIVE_PARENT_ID,folderId:v.docs.folderId})});
     const d=await r.json();
     if(d.moved){
-      v.docs.carfax=true;saveVehicles();renderAll();
+      v.docs.carfax=true;await autoCheckSteps(v);saveVehicles();renderAll();
       showNotif('<i class="ti ti-check"></i> Carfax déplacé : <strong>'+d.fileName+'</strong>','ok');
     } else {
       showNotif('<i class="ti ti-alert-triangle"></i> '+d.message,'warn');
@@ -1262,6 +1310,7 @@ async function uploadFile(vid, type){
         if(d.uploaded){
           if(type==='inspection')v.docs.inspection=true;
           else v.docs.estimation=true;
+          await autoCheckSteps(v);
           saveVehicles();renderAll();
           showNotif('<i class="ti ti-upload"></i> <strong>'+fileName+'</strong> uploadé dans Drive','ok');
         }
