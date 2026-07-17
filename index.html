@@ -285,12 +285,13 @@ header{background:var(--blue);color:white;padding:0 20px;height:56px;display:fle
   </div>
   <div class="tab-content active" id="tab-content-vo"><div class="main">
     <div class="stats">
-      <div class="stat"><div class="stat-label">En cours</div><div class="stat-val blue" id="s-active">–</div></div>
-      <div class="stat"><div class="stat-label">Complétés</div><div class="stat-val green" id="s-done">–</div></div>
-      <div class="stat"><div class="stat-label">En retard</div><div class="stat-val red" id="s-late">–</div></div>
-      <div class="stat" onclick="setFilter('carfax',null)" style="cursor:pointer"><div class="stat-label">Carfax manquant</div><div class="stat-val amber" id="s-carfax">–</div></div>
-      <div class="stat" onclick="setFilter('inspection',null)" style="cursor:pointer"><div class="stat-label">Inspection manquante</div><div class="stat-val amber" id="s-inspection">–</div></div>
-      <div class="stat"><div class="stat-label">&lt; 10 photos</div><div class="stat-val amber" id="s-photos">–</div></div>
+      <div class="stat" onclick="setFilter('active',null)" style="cursor:pointer" title="Voir en cours"><div class="stat-label">En cours</div><div class="stat-val blue" id="s-active">–</div></div>
+      <div class="stat" onclick="setFilter('done',null)" style="cursor:pointer" title="Voir complétés"><div class="stat-label">Complétés</div><div class="stat-val green" id="s-done">–</div></div>
+      <div class="stat" onclick="setFilter('late',null)" style="cursor:pointer" title="Voir en retard"><div class="stat-label">En retard</div><div class="stat-val red" id="s-late">–</div></div>
+      <div class="stat" onclick="setFilter('carfax',null)" style="cursor:pointer" title="Voir carfax manquants"><div class="stat-label">Carfax manquant</div><div class="stat-val amber" id="s-carfax">–</div></div>
+      <div class="stat" onclick="setFilter('inspection',null)" style="cursor:pointer" title="Voir inspections manquantes"><div class="stat-label">Inspection manquante</div><div class="stat-val amber" id="s-inspection">–</div></div>
+      <div class="stat" onclick="setFilter('carro',null)" style="cursor:pointer" title="Voir carrosserie à faire"><div class="stat-label">Carrosserie à faire</div><div class="stat-val amber" id="s-carro">–</div></div>
+      <div class="stat" onclick="setFilter('fewphotos',null)" style="cursor:pointer" title="Voir &lt; 10 photos"><div class="stat-label">&lt; 10 photos</div><div class="stat-val amber" id="s-photos">–</div></div>
     </div>
 
     <div id="my-tasks-banner" style="display:none;background:var(--blue);color:white;border-radius:var(--radius);padding:14px 18px;margin-bottom:14px;align-items:center;justify-content:space-between;gap:12px">
@@ -1455,6 +1456,11 @@ function updateStats(){
   if(si) si.textContent = inspMissing;
   const di=0; // legacy
   // s-docs replaced by s-carfax and s-inspection above
+  const scarro = document.getElementById('s-carro');
+  if(scarro) scarro.textContent = vehicles.filter(function(v){
+    const idx = v.steps ? v.steps.findIndex(function(s){return s.id==='carro';}) : -1;
+    return idx !== -1 && !v.sd[idx].done;
+  }).length;
   const pi=vehicles.filter(v=>v.docs.enligne&&v.docs.photos!==null&&v.docs.photos<10).length;
   const sel=document.getElementById('s-photos');
   if(sel)sel.textContent=pi||'–';
