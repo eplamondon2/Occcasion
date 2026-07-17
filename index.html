@@ -314,6 +314,7 @@ header{background:var(--blue);color:white;padding:0 20px;height:56px;display:fle
         <button class="filter-btn" onclick="setFilter('done',this)">Complétés</button>
         <button class="filter-btn" onclick="setFilter('carfax',this)">Carfax manquant</button>
         <button class="filter-btn" onclick="setFilter('inspection',this)">Inspection manquante</button>
+        <button class="filter-btn" onclick="setFilter('carro',this)">Carrosserie à faire</button>
         <button class="filter-btn" onclick="setFilter('fewphotos',this)">&lt; 10 photos</button>
         <button class="filter-btn" onclick="setFilter('okphotos',this)">&ge; 10 photos</button>
       </div>
@@ -996,6 +997,10 @@ function renderAll(){
   else if(currentFilter==='done') list=list.filter(v=>progress(v)===100);
   else if(currentFilter==='carfax') list=list.filter(function(v){return !v.docs.carfax&&v.docs.folderId;});
   else if(currentFilter==='inspection') list=list.filter(function(v){return !v.docs.inspection&&v.docs.folderId;});
+  else if(currentFilter==='carro') list=list.filter(function(v){
+    const carroStep = v.steps ? v.steps.findIndex(function(s){return s.id==='carro';}) : -1;
+    return carroStep !== -1 && !v.sd[carroStep].done;
+  });
   else if(currentFilter==='fewphotos') list=list.filter(v=>v.docs.enligne&&v.docs.photos!==null&&v.docs.photos<10);
   else if(currentFilter==='okphotos') list=list.filter(v=>v.docs.enligne&&v.docs.photos!==null&&v.docs.photos>=10);
   else if(currentFilter==='mine') list=getMyTasks();
