@@ -506,6 +506,7 @@ header{background:var(--blue);color:white;padding:0 20px;height:56px;display:fle
           <button class="btn btn-primary" onclick="useVLTireInConverter()" style="font-size:12px">Utiliser dans le convertisseur</button>
           <button class="btn" onclick="useVLTireInComparator(1)" style="font-size:12px">→ Dimension 1 du comparateur</button>
           <button class="btn" onclick="useVLTireInComparator(2)" style="font-size:12px">→ Dimension 2 du comparateur</button>
+          <button class="btn" onclick="searchPneusFromVL()" style="font-size:12px;background:#f0fdf4;border-color:#16a34a;color:#15803d"><i class="ti ti-search" style="font-size:11px"></i> Voir pneus disponibles</button>
         </div>
       </div>
     </div>
@@ -540,6 +541,7 @@ header{background:var(--blue);color:white;padding:0 20px;height:56px;display:fle
             <div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase">Largeur (po)</div><div id="cv-winch" style="font-size:20px;font-weight:700;color:var(--blue)"></div></div>
             <div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase">Flanc (mm)</div><div id="cv-sw" style="font-size:20px;font-weight:700;color:var(--blue)"></div></div>
           </div>
+          <button class="btn" onclick="searchPneusFromConverter()" style="font-size:12px;margin-bottom:10px;background:#f0fdf4;border-color:#16a34a;color:#15803d"><i class="ti ti-search" style="font-size:11px"></i> Voir pneus disponibles pour cette grandeur</button>
           <div style="font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em">Grandeurs équivalentes par jante</div>
           <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px" id="cv-rim-tabs"></div>
           <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px" id="cv-table">
@@ -582,7 +584,8 @@ header{background:var(--blue);color:white;padding:0 20px;height:56px;display:fle
             <div id="cmp-2-diam" style="font-size:11px;color:var(--text-muted);margin-top:6px"></div>
           </div>
         </div>
-        <button class="btn btn-primary" onclick="runComparator()" style="font-size:13px;padding:8px 16px;margin-bottom:14px">Calculer</button>
+        <button class="btn btn-primary" onclick="runComparator()" style="font-size:13px;padding:8px 16px;margin-bottom:8px">Calculer</button>
+        <button class="btn" onclick="searchPneusFromComparator()" style="font-size:12px;padding:8px 14px;margin-bottom:14px;background:#f0fdf4;border-color:#16a34a;color:#15803d"><i class="ti ti-search" style="font-size:11px"></i> Voir pneus disponibles</button>
         <div id="cmp-result" style="display:none">
           <div style="border-radius:8px;padding:14px;margin-bottom:12px" id="cmp-alert-box">
             <div style="font-size:16px;font-weight:700;margin-bottom:4px" id="cmp-pct"></div>
@@ -1553,6 +1556,142 @@ async function addVehicle(){
   ['f-stk','f-yr','f-mk','f-mo','f-km','f-pr','f-col','f-url'].forEach(id=>{if(document.getElementById(id))document.getElementById(id).value='';});
   renderAll();
   showNotif('<i class="ti ti-check"></i> Dossier créé — <strong>'+year+' '+make+' '+model+'</strong> (#'+stock+')','ok');
+}
+
+// ===== RECHERCHE PNEUS DEPUIS OUTILS =====
+function calcDiamFromStr(size){
+  // Accept formats: 225/60R17, 225/60/17, 225-60-17
+  const m = size.replace(/[R\-]/g,'/').match(/(\d+)\/(\d+)\/(\d+)/);
+  if(!m) return null;
+  return calcDiam(parseInt(m[1]), parseInt(m[2]), parseInt(m[3]));
+}
+
+function findCompatibleSizes(targetSize){
+  // Find all unique grandeurs in inventory that have compatible diameter (±3%)
+  const targetDiam = calcDiamFromStr(targetSize);
+  if(!targetDiam) return [];
+  
+  const compatible = [];
+  const seen = new Set();
+  
+  prItems.filter(function(i){ return !i.vendu && i.type==='pneu'; }).forEach(function(item){
+    const g = (item.grandeur||'').trim();
+    if(!g || seen.has(g)) return;
+    seen.add(g);
+    const d = calcDiamFromStr(g.replace('R','/'));
+    if(!d) return;
+    const diff = Math.abs((d-targetDiam)/targetDiam*100);
+    if(diff <= 3 && g !== targetSize.replace('/','R').replace('/','/')) {
+      compatible.push({size:g, diam:d, diff:Math.round(diff*10)/10});
+    }
+  });
+  
+  return compatible.sort(function(a,b){ return a.diff-b.diff; });
+}
+
+function searchPneusForSize(size){
+  switchTab('pr');
+  
+  function doSearch(){
+    // Normalize size format for search
+    const searchSize = size.replace('R','/');
+    document.getElementById('pr-f-type').value = '';
+    document.getElementById('pr-f-vendu').value = 'false';
+    document.getElementById('pr-search').value = searchSize;
+    renderPR();
+    
+    // Count results
+    const exactCount = prItems.filter(function(i){
+      return !i.vendu && (i.grandeur||'').replace('R','/').includes(searchSize);
+    }).length;
+    
+    if(exactCount > 0){
+      showNotif('<i class="ti ti-check"></i> <strong>'+exactCount+' pneu'+( exactCount>1?'s':'')+' disponible'+(exactCount>1?'s':'')+' en '+searchSize+'</strong>','ok');
+    } else {
+      // No exact match - find compatible sizes
+      const compatible = findCompatibleSizes(size);
+      if(compatible.length > 0){
+        // Show compatible sizes panel
+        showCompatibleSizes(size, compatible);
+      } else {
+        showNotif('<i class="ti ti-alert-triangle"></i> Aucun pneu <strong>'+searchSize+'</strong> en stock','warn');
+      }
+    }
+  }
+  
+  if(prItems.length === 0){
+    loadPR().then(doSearch);
+  } else {
+    doSearch();
+  }
+}
+
+function showCompatibleSizes(originalSize, compatible){
+  // Remove existing panel
+  const existing = document.getElementById('compat-panel');
+  if(existing) existing.remove();
+  
+  const panel = document.createElement('div');
+  panel.id = 'compat-panel';
+  panel.style.cssText = 'position:fixed;bottom:0;left:0;right:0;background:var(--card);border-top:2px solid #f59e0b;padding:16px 20px;z-index:150;box-shadow:0 -4px 20px rgba(0,0,0,.15)';
+  
+  const rows = compatible.slice(0,8).map(function(c){
+    const count = prItems.filter(function(i){
+      return !i.vendu && (i.grandeur||'').replace('R','/').includes(c.size.replace('R','/'));
+    }).length;
+    return '<button onclick="searchPneusForSizeCompat(&quot;'+c.size+'&quot;)" style="padding:6px 12px;border:1px solid var(--border);border-radius:6px;background:var(--bg);font-size:12px;cursor:pointer;color:var(--text)">'
+      +'<strong>'+c.size+'</strong> <span style="color:var(--text-muted);font-size:11px">('+c.diff+'% diff · '+count+' dispo)</span></button>';
+  }).join('');
+  
+  panel.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px">'
+    +'<div><div style="font-size:13px;font-weight:600;margin-bottom:8px">⚠️ Aucun pneu <strong>'+originalSize+'</strong> en stock — Grandeurs compatibles disponibles :</div>'
+    +'<div style="display:flex;gap:6px;flex-wrap:wrap">'+rows+'</div>'
+    +'<div style="font-size:11px;color:var(--text-muted);margin-top:6px">Différence de diamètre ≤ 3% — Compatible pour la plupart des véhicules</div></div>'
+    +'<button onclick="closeCompatPanel()" style="border:none;background:none;font-size:18px;cursor:pointer;color:var(--text-muted)">✕</button>'
+    +'</div>';
+  
+  document.body.appendChild(panel);
+}
+
+function closeCompatPanel(){ const p=document.getElementById('compat-panel'); if(p) p.remove(); }
+
+function searchPneusForSizeCompat(size){
+  const existing = document.getElementById('compat-panel');
+  if(existing) existing.remove();
+  document.getElementById('pr-search').value = size.replace('R','/');
+  renderPR();
+  const count = prItems.filter(function(i){
+    return !i.vendu && (i.grandeur||'').replace('R','/').includes(size.replace('R','/'));
+  }).length;
+  showNotif('<i class="ti ti-check"></i> <strong>'+count+' pneu'+(count>1?'s':'')+' disponible'+(count>1?'s':'')+' en '+size+'</strong>','ok');
+}
+
+function searchPneusFromVL(){
+  const make = document.getElementById('vl-make').value;
+  const model = document.getElementById('vl-model').value;
+  const range = document.getElementById('vl-year').value;
+  if(!make||!model||!range) return;
+  const spec = TIRE_VEHICLE_DB[make][model][range];
+  if(!spec) return;
+  // Extract just the size numbers (ex: 225/60R17 -> 225/60/17)
+  const size = spec.tire.replace('R','/');
+  searchPneusForSize(size);
+}
+
+function searchPneusFromConverter(){
+  const w = document.getElementById('cv-w').value;
+  const r = document.getElementById('cv-r').value;
+  const d = document.getElementById('cv-d').value;
+  if(!w||!r||!d) return;
+  searchPneusForSize(w+'/'+r+'/'+d);
+}
+
+function searchPneusFromComparator(){
+  const w = document.getElementById('cmp-1w').value;
+  const r = document.getElementById('cmp-1r').value;
+  const d = document.getElementById('cmp-1d').value;
+  if(!w||!r||!d){ showNotif('Entrez la Dimension 1 dabord','warn'); return; }
+  searchPneusForSize(w+'/'+r+'/'+d);
 }
 
 // ===== CONVERSION PNEUS =====
