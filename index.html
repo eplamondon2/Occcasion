@@ -245,7 +245,7 @@ header{background:var(--blue);color:white;padding:0 20px;height:56px;display:fle
         <option value="Nicolas Rivard">Nicolas Rivard — Directeur adjoint</option>
         <option value="Martin Napier">Martin Napier — Esthétique</option>
         <option value="Nicolas Fiset">Nicolas Fiset — Esthétique</option>
-        <option value="Charles Boivin">Charles Boivin — Responsable mise en marché</option>
+        <option value="Alexandre Ouellette">Alexandre Ouellette — Directeur Fiset</option>
         <option value="Vincent Bouchard">Vincent Bouchard — Dir. pièces / Inspection</option>
         <option value="Yves Huard">Yves Huard — Pneus &amp; Roues</option>
       </select>
@@ -727,7 +727,7 @@ const TEAM = {
   'Nicolas Rivard': {role:'Directeur adjoint', initials:'NR', email:'nrivard@hyundaistraymond.ca'},
   'Martin Napier': {role:'Esthétique', initials:'MN', email:'livraison@hyundaistraymond.ca'},
   'Nicolas Fiset': {role:'Esthétique', initials:'NF', email:'autofiset@outlook.com'},
-  'Charles Boivin': {role:'Responsable mise en marché', initials:'CB', email:'charles.boivin@hyundaistraymond.ca'},
+  'Alexandre Ouellette': {role:'Directeur Fiset', initials:'AO', email:''},
   'Vincent Bouchard': {role:'Dir. pièces / Inspection', initials:'VB', email:'vbouchard@hyundaistraymond.ca'},
   'Yves Huard': {role:'Pneus & Roues', initials:'YH', email:''},
 };
@@ -742,7 +742,7 @@ const STEPS_DEF = [
   {id:'carro',phase:'service',name:'Carrosserie / débosselage complété',assign:'Nicolas Rivard → Carrosserie',delay:3,icon:'ti-car-crash',optional:true,key:'carro'},
   {id:'pb',phase:'service',name:'Pare-brise remplacé',assign:'Service',delay:3,icon:'ti-windmill',optional:true,key:'pb'},
   {id:'esthet',phase:'service',name:'Remise à neuf — Esthétique',assign:'Martin Napier / Nicolas Fiset',delay:5,icon:'ti-sparkles',key:'esthet'},
-  {id:'photos',phase:'photo',name:'Séance photo finale',assign:'Charles Boivin / Nicolas Rivard',delay:5,icon:'ti-camera',key:'photos'},
+  {id:'photos',phase:'photo',name:'Séance photo finale',assign:'Alexandre Ouellette / Nicolas Rivard',delay:5,icon:'ti-camera',key:'photos'},
   {id:'complet',phase:'photo',name:'Dossier complet — prêt à la vente',assign:'Serge Grenier',delay:6,icon:'ti-circle-check'},
 ];
 const PHASES = [
@@ -807,7 +807,7 @@ function showApp(){
   const info = TEAM[currentUser]||{};
   document.getElementById('header-username').textContent = currentUser + (info.role?' — '+info.role:'');
   document.getElementById('header-avatar').textContent = info.initials||currentUser[0];
-  const canEdit = ['Etienne Plamondon','Serge Grenier','Nicolas Rivard','Charles Boivin'].includes(currentUser);
+  const canEdit = ['Etienne Plamondon','Serge Grenier','Nicolas Rivard'].includes(currentUser);
   document.getElementById('btn-add').style.display = canEdit?'inline-flex':'none';
   const isFieldWorker = ['Martin Napier','Nicolas Fiset','Vincent Bouchard'].includes(currentUser);
   if(isFieldWorker){ currentFilter='mine'; }
@@ -971,7 +971,7 @@ const ROLE_STEPS = {
   'Vincent Bouchard': ['insp'],
   'Martin Napier': ['esthet'],
   'Nicolas Fiset': ['esthet'],
-  'Charles Boivin': ['photos'],
+  'Alexandre Ouellette': ['photos'],
   'Serge Grenier': ['enligne','prix','req_insp','req_carro','req_pb','complet'],
   'Nicolas Rivard': ['enligne','prix','req_insp','req_carro','req_pb','carro','photos'],
 };
@@ -1072,7 +1072,7 @@ function renderCard(v){
   const webStatus=d.scanningWeb?spin:d.enligne===null?'<span class="dc-val muted">—</span>':d.enligne?'<span class="dc-val ok"><i class="ti ti-check"></i> En ligne</span>':'<span class="dc-val missing"><i class="ti ti-x"></i> Non trouvé</span>';
   const photosStatus=d.scanningWeb?spin:d.enligne===null?'<span class="dc-val muted">—</span>':d.photos>0?'<span class="dc-val ok"><i class="ti ti-camera"></i> '+d.photos+' photos</span>':'<span class="dc-val missing"><i class="ti ti-camera-off"></i> Aucune photo</span>';
   const driveHref=d.driveFolder?`<a href="${d.driveFolder}" target="_blank" class="btn-sm drive"><i class="ti ti-brand-google-drive" style="font-size:11px"></i> Ouvrir Drive</a>`:'';
-  const canEdit=['Etienne Plamondon','Serge Grenier','Nicolas Rivard','Charles Boivin'].includes(currentUser);
+  const canEdit=['Etienne Plamondon','Serge Grenier','Nicolas Rivard','Alexandre Ouellette'].includes(currentUser);
   const stepsHtml=PHASES.map(ph=>{
     const ps=v.steps.map((s,i)=>({s,i})).filter(({s})=>s.phase===ph.id);
     if(!ps.length)return'';
@@ -1155,7 +1155,7 @@ function renderStep(v,s,i,canEdit){
   else if(st==='warn'){dlTxt='Délai atteint aujourd\'hui';dlC='warn';}
   else if(dl===0){dlTxt='Automatique à l\'arrivée';dlC='ok';}
   else{const left=dl-v.daysAgo;dlTxt='Délai dans '+left+' jour'+(left>1?'s':'');dlC='ok';}
-  const isDir=['Etienne Plamondon','Serge Grenier','Nicolas Rivard','Charles Boivin'].includes(currentUser);
+  const isDir=['Etienne Plamondon','Serge Grenier','Nicolas Rivard','Alexandre Ouellette'].includes(currentUser);
   const myStep=isMyStep(s);
   const myStepIds=ROLE_STEPS[currentUser]||[];
   const isMyOwnStep=myStepIds.includes(s.id);
@@ -2002,7 +2002,7 @@ const USER_ROLES = {
   'Nicolas Rivard':'Directeur adjoint',
   'Martin Napier':'Esthétique',
   'Nicolas Fiset':'Esthétique',
-  'Charles Boivin':'Photos',
+  'Alexandre Ouellette':'Photos',
   'Vincent Bouchard':'Dir. pièces / Inspection',
   'Yves Huard':'Pneus & Roues'
 };
@@ -2147,7 +2147,7 @@ let prItems = [];
 let prSort = {key:'id', dir:1};
 let prEditId = null;
 
-const CAN_EDIT_PR = ['Etienne Plamondon','Serge Grenier','Nicolas Rivard','Charles Boivin','Yves Huard'];
+const CAN_EDIT_PR = ['Etienne Plamondon','Serge Grenier','Nicolas Rivard','Alexandre Ouellette','Yves Huard'];
 
 function switchTab(tab){
   document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
