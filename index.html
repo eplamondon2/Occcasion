@@ -733,17 +733,17 @@ const TEAM = {
 };
 
 const STEPS_DEF = [
-  {id:'enligne',phase:'dir',name:'Mise en ligne site web D2C',assign:'Serge Grenier / Nicolas Rivard',delay:1,icon:'ti-world'},
+  {id:'enligne',phase:'dir',name:'Mise en ligne site web D2C',assign:'Dir. mise en marché',delay:1,icon:'ti-world'},
 
   {id:'req_insp',phase:'dir',name:'Requête inspection',assign:'Dir. occasion → Service',delay:1,icon:'ti-clipboard-list'},
-  {id:'req_carro',phase:'dir',name:'Requête carrosserie',assign:'Nicolas Rivard → Carrosserie',delay:1,icon:'ti-car-crash',optional:true,key:'carro'},
+  {id:'req_carro',phase:'dir',name:'Requête carrosserie',assign:'Dir. occasion → Carrosserie',delay:1,icon:'ti-car-crash',optional:true,key:'carro'},
   {id:'req_pb',phase:'dir',name:'Requête pare-brise',assign:'Dir. → Service',delay:1,icon:'ti-windmill',optional:true,key:'pb'},
-  {id:'insp',phase:'service',name:'Inspection mécanique complétée',assign:'Vincent Bouchard',delay:3,icon:'ti-tool'},
-  {id:'carro',phase:'service',name:'Carrosserie / débosselage complété',assign:'Nicolas Rivard → Carrosserie',delay:3,icon:'ti-car-crash',optional:true,key:'carro'},
+  {id:'insp',phase:'service',name:'Inspection mécanique complétée',assign:'Département service',delay:3,icon:'ti-tool'},
+  {id:'carro',phase:'service',name:'Carrosserie / débosselage complété',assign:'Dir. occasion → Carrosserie',delay:3,icon:'ti-car-crash',optional:true,key:'carro'},
   {id:'pb',phase:'service',name:'Pare-brise remplacé',assign:'Service',delay:3,icon:'ti-windmill',optional:true,key:'pb'},
-  {id:'esthet',phase:'service',name:'Remise à neuf — Esthétique',assign:'Martin Napier / Nicolas Fiset',delay:5,icon:'ti-sparkles',key:'esthet'},
-  {id:'photos',phase:'photo',name:'Séance photo finale',assign:'Alexandre Ouellette / Nicolas Rivard',delay:5,icon:'ti-camera',key:'photos'},
-  {id:'complet',phase:'photo',name:'Dossier complet — prêt à la vente',assign:'Serge Grenier',delay:6,icon:'ti-circle-check'},
+  {id:'esthet',phase:'service',name:'Remise à neuf — Esthétique',assign:'Esthétique',delay:5,icon:'ti-sparkles',key:'esthet'},
+  {id:'photos',phase:'photo',name:'Séance photo finale',assign:'Photos & mise en marché',delay:5,icon:'ti-camera',key:'photos'},
+  {id:'complet',phase:'photo',name:'Dossier complet — prêt à la vente',assign:'Dir. des ventes',delay:6,icon:'ti-circle-check'},
 ];
 const PHASES = [
   {id:'dir',label:'Direction — mise en marché',icon:'ti-user'},
@@ -807,7 +807,7 @@ function showApp(){
   const info = TEAM[currentUser]||{};
   document.getElementById('header-username').textContent = currentUser + (info.role?' — '+info.role:'');
   document.getElementById('header-avatar').textContent = info.initials||currentUser[0];
-  const canEdit = ['Etienne Plamondon','Serge Grenier','Nicolas Rivard'].includes(currentUser);
+  const canEdit = ['Etienne Plamondon','Serge Grenier','Nicolas Rivard','Alexandre Ouellette'].includes(currentUser);
   document.getElementById('btn-add').style.display = canEdit?'inline-flex':'none';
   const isFieldWorker = ['Martin Napier','Nicolas Fiset','Vincent Bouchard'].includes(currentUser);
   if(isFieldWorker){ currentFilter='mine'; }
