@@ -291,6 +291,7 @@ header{background:var(--blue);color:white;padding:0 20px;height:56px;display:fle
       <div class="stat" onclick="setFilter('carfax',null)" style="cursor:pointer" title="Voir carfax manquants"><div class="stat-label">Carfax manquant</div><div class="stat-val amber" id="s-carfax">–</div></div>
       <div class="stat" onclick="setFilter('inspection',null)" style="cursor:pointer" title="Voir inspections manquantes"><div class="stat-label">Inspection manquante</div><div class="stat-val amber" id="s-inspection">–</div></div>
       <div class="stat" onclick="setFilter('carro',null)" style="cursor:pointer" title="Voir carrosserie à faire"><div class="stat-label">Carrosserie à faire</div><div class="stat-val amber" id="s-carro">–</div></div>
+      <div class="stat" onclick="setFilter('pb',null)" style="cursor:pointer" title="Pare-brise à remplacer"><div class="stat-label">Pare-brise à faire</div><div class="stat-val amber" id="s-pb">–</div></div>
       <div class="stat" onclick="setFilter('fewphotos',null)" style="cursor:pointer" title="Voir &lt; 10 photos"><div class="stat-label">&lt; 10 photos</div><div class="stat-val amber" id="s-photos">–</div></div>
       <div class="stat" onclick="setFilter('okphotos',null)" style="cursor:pointer" title="Voir ≥ 10 photos"><div class="stat-label">≥ 10 photos</div><div class="stat-val green" id="s-okphotos">–</div></div>
     </div>
@@ -1033,6 +1034,10 @@ function renderAll(){
     const carroStep = v.steps ? v.steps.findIndex(function(s){return s.id==='carro';}) : -1;
     return carroStep !== -1 && !v.sd[carroStep].done;
   });
+  else if(currentFilter==='pb') list=list.filter(function(v){
+    const pbStep = v.steps ? v.steps.findIndex(function(s){return s.id==='pb';}) : -1;
+    return pbStep !== -1 && !v.sd[pbStep].done;
+  });
   else if(currentFilter==='fewphotos') list=list.filter(v=>v.docs.enligne&&v.docs.photos!==null&&v.docs.photos<10);
   else if(currentFilter==='okphotos') list=list.filter(v=>v.docs.enligne&&v.docs.photos!==null&&v.docs.photos>=10);
   else if(currentFilter==='mine') list=getMyTasks();
@@ -1271,7 +1276,7 @@ async function checkWeb(vid){
   const PROXY='https://script.google.com/macros/s/AKfycbz6Rjxm_w5BReK6UUWogSkVN51yvkVpiDSuEFvzC-EKblMmiBw9bwU1VpsQXbgHPH8/exec';
   try{
     // Step 1: Get inventory to find vehicle
-    const r=await fetch(PROXY,{signal:AbortSignal.timeout(20000)});
+    const r=await fetch(PROXY,{signal:AbortSignal.timeout(45000)});
     const inventory=await r.json();
     const vehicle=inventory.find(x=>(x['stock number']||'').toUpperCase()===v.stock.toUpperCase());
     if(!vehicle){
@@ -1449,12 +1454,19 @@ const originalToggle = toggle;
 
 async function autoScanAll(){
   const today = new Date().toDateString();
-  const toScan = vehicles.filter(v => !v.docs.lastScan || new Date(v.docs.lastScan).toDateString() !== today);
+  // Only scan active vehicles (not completed) that haven't been scanned today
+  const toScan = vehicles.filter(v => {
+    if(v.docs.lastScan && new Date(v.docs.lastScan).toDateString() === today) return false;
+    if(progress(v) === 100) return false; // skip completed
+    return true;
+  });
   if(!toScan.length) return;
   console.log('Auto-scanning', toScan.length, 'vehicles...');
   for(const v of toScan){
-    await checkDrive(v.id);
-    await checkWeb(v.id);
+    try{
+      await checkDrive(v.id);
+      await checkWeb(v.id);
+    }catch(e){ console.log('Scan error for', v.stock, e.message); }
     v.docs.lastScan = new Date().toISOString();
     await saveVehicle(v);
   }
@@ -1490,6 +1502,11 @@ function updateStats(){
   const scarro = document.getElementById('s-carro');
   if(scarro) scarro.textContent = vehicles.filter(function(v){
     const idx = v.steps ? v.steps.findIndex(function(s){return s.id==='carro';}) : -1;
+    return idx !== -1 && !v.sd[idx].done;
+  }).length;
+  const spb = document.getElementById('s-pb');
+  if(spb) spb.textContent = vehicles.filter(function(v){
+    const idx = v.steps ? v.steps.findIndex(function(s){return s.id==='pb';}) : -1;
     return idx !== -1 && !v.sd[idx].done;
   }).length;
   const pi=vehicles.filter(v=>v.docs.enligne&&v.docs.photos!==null&&v.docs.photos<10).length;
