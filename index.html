@@ -1268,7 +1268,7 @@ async function checkWeb(vid){
   const v=vehicles.find(x=>x.id===vid);
   if(!v||v.docs.scanningWeb)return;
   v.docs.scanningWeb=true;renderAll();
-  const PROXY='https://script.google.com/macros/s/AKfycbxY1zzQzzfb4ydr75LQniz5x_Ihcnvuvb3lpXradBS-Mkz1TKre5pis3hQuzuwHHFIU/exec';
+  const PROXY='https://script.google.com/macros/s/AKfycbz6Rjxm_w5BReK6UUWogSkVN51yvkVpiDSuEFvzC-EKblMmiBw9bwU1VpsQXbgHPH8/exec';
   try{
     // Step 1: Get inventory to find vehicle
     const r=await fetch(PROXY,{signal:AbortSignal.timeout(20000)});
