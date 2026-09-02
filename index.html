@@ -1461,14 +1461,25 @@ async function autoScanAll(){
     return true;
   });
   if(!toScan.length) return;
-  console.log('Auto-scanning', toScan.length, 'vehicles...');
+  console.log('Auto-scanning', toScan.length, 'vehicles (Drive only)...');
+  // Batch Drive scans - reliable and fast
   for(const v of toScan){
     try{
       await checkDrive(v.id);
-      await checkWeb(v.id);
-    }catch(e){ console.log('Scan error for', v.stock, e.message); }
+    }catch(e){ console.log('Drive scan error for', v.stock, e.message); }
     v.docs.lastScan = new Date().toISOString();
     await saveVehicle(v);
+    // Small delay to avoid overloading
+    await new Promise(r => setTimeout(r, 300));
+  }
+  // Web scan only for vehicles without web data yet (max 10 at a time)
+  const needWebScan = toScan.filter(v => v.docs.enligne === null || v.docs.enligne === undefined).slice(0, 10);
+  if(needWebScan.length > 0){
+    console.log('Web scanning', needWebScan.length, 'new vehicles...');
+    for(const v of needWebScan){
+      try{ await checkWeb(v.id); }catch(e){ console.log('Web scan error for', v.stock); }
+      await new Promise(r => setTimeout(r, 1000));
+    }
   }
   renderAll();
 }
