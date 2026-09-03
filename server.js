@@ -606,7 +606,7 @@ app.post('/api/move-carfax', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-const APPS_SCRIPT_UPLOAD_URL = 'https://script.google.com/macros/s/AKfycbxY1zzQzzfb4ydr75LQniz5x_Ihcnvuvb3lpXradBS-Mkz1TKre5pis3hQuzuwHHFIU/exec';
+const APPS_SCRIPT_UPLOAD_URL = 'https://script.google.com/macros/s/AKfycbz6Rjxm_w5BReK6UUWogSkVN51yvkVpiDSuEFvzC-EKblMmiBw9bwU1VpsQXbgHPH8/exec';
 
 app.post('/api/upload-file', async (req, res) => {
   const { folderId, fileName, fileData, mimeType } = req.body;
